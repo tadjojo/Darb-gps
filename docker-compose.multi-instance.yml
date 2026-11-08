@@ -1,0 +1,63 @@
+# Run with: docker compose --env-file .env -f docker-compose.yml -f docker-compose.multi-instance.yml up --build -d
+services:
+  migrate:
+    build:
+      context: .
+      target: build
+    restart: "no"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://darb_app:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-darb_gps}
+    depends_on:
+      postgres: { condition: service_healthy }
+    command: ["npm", "run", "migration:up"]
+
+  api-1:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://darb_app:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-darb_gps}
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api-1
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["127.0.0.1:3001:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  api-2:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://darb_app:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-darb_gps}
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api-2
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["127.0.0.1:3002:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  load-balancer:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      api-1: { condition: service_healthy }
+      api-2: { condition: service_healthy }
+    ports: ["127.0.0.1:8080:80"]
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro

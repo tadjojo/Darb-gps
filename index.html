@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1730"><meta name="description" content="دَرْب GPS — منصة موحدة للملاحة وتتبع المركبات وإدارة الأساطيل.">
+  <title>دَرْب GPS | لوحة التحكم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview"><span class="brand-mark">د</span><span><b>دَرْب GPS</b><small>نظام الملاحة والتتبع</small></span></a>
+      <div class="workspace"><span class="workspace-dot"></span><span>مساحة العمل</span><strong>تجريبية</strong></div>
+      <nav class="nav-menu" aria-label="القائمة الرئيسية">
+        <p class="nav-caption">الرئيسية</p>
+        <a class="nav-link active" href="#overview" data-view="overview"><span>▦</span> نظرة عامة</a>
+        <a class="nav-link" href="#map-view" data-view="map"><span>⌖</span> الخريطة المباشرة</a>
+        <a class="nav-link" href="#vehicles" data-view="vehicles"><span>▰</span> المركبات</a>
+        <a class="nav-link" href="#devices" data-view="devices"><span>◉</span> أجهزة GPS</a>
+        <a class="nav-link" href="#trips" data-view="trips"><span>↗</span> الرحلات والسجل</a>
+        <p class="nav-caption">الإدارة</p>
+        <a class="nav-link" href="#alerts" data-view="alerts"><span>♧</span> التنبيهات</a>
+        <a class="nav-link" href="#reports" data-view="reports"><span>▤</span> التقارير</a>
+        <a class="nav-link" href="#settings" data-view="settings"><span>⚙</span> الإعدادات والربط</a>
+      </nav>
+      <div class="sidebar-bottom"><div class="help-card"><div class="help-icon">?</div><b>تحتاج إلى مساعدة؟</b><p>راجع دليل إعداد الموقع وربطه بالخادم.</p><a href="README.md" target="_blank">دليل التشغيل ↗</a></div><div class="profile"><div class="avatar">د</div><div><b id="profileName">مستخدم تجريبي</b><small id="profileRole">وضع العرض</small></div><button id="logoutBtn" class="icon-btn" title="تسجيل الخروج" aria-label="تسجيل الخروج">⇥</button></div></div>
+    </aside>
+    <main class="main-content">
+      <header class="topbar"><button class="mobile-menu icon-btn" id="menuBtn" aria-label="فتح القائمة">☰</button><div class="breadcrumb">دَرْب GPS <span>/</span> <b id="pageTitle">نظرة عامة</b></div><div class="top-actions"><span class="connection" id="connectionState"><i></i> وضع العرض التجريبي</span><button class="icon-btn" id="langBtn" title="Switch language">EN</button><button class="primary-btn small" id="loginBtn">تسجيل الدخول</button></div></header>
+      <section class="page active" id="page-overview">
+        <div class="welcome-row"><div><p class="eyebrow">الأحد، لوحة القيادة</p><h1>مرحباً بك في دَرْب <span>👋</span></h1><p class="muted">تابع مركباتك وأجهزتك وتحركات أسطولك من مكان واحد.</p></div><div class="welcome-actions"><button class="outline-btn" id="refreshBtn">↻ تحديث البيانات</button><button class="primary-btn" id="addVehicleBtn">＋ إضافة مركبة</button></div></div>
+        <div class="demo-notice" id="demoNotice"><span>ⓘ</span><div><b>أنت الآن في وضع العرض التجريبي</b><p>الأرقام والمركبات المعروضة أمثلة توضيحية. اربط الموقع بخادم دَرْب وسجّل الدخول لعرض بياناتك الحقيقية.</p></div><button id="noticeLogin">ربط حسابي</button></div>
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span>إجمالي المركبات</span><span class="stat-icon blue">▰</span></div><div class="stat-value" id="statVehicles">24</div><div class="stat-foot"><span class="positive">↑ 8.2%</span><span>مقارنة بالشهر الماضي</span></div></article>
+          <article class="stat-card"><div class="stat-top"><span>تعمل الآن</span><span class="stat-icon green">◉</span></div><div class="stat-value" id="statMoving">18</div><div class="stat-foot"><span class="live-dot"></span><span>آخر تحديث للموقع</span></div></article>
+          <article class="stat-card"><div class="stat-top"><span>متوقفة</span><span class="stat-icon amber">Ⅱ</span></div><div class="stat-value" id="statStopped">4</div><div class="stat-foot"><span>ضمن الأسطول الحالي</span></div></article>
+          <article class="stat-card"><div class="stat-top"><span>تنبيهات مفتوحة</span><span class="stat-icon red">♧</span></div><div class="stat-value" id="statAlerts">2</div><div class="stat-foot"><span class="muted">تحتاج إلى المراجعة</span></div></article>
+        </div>
+        <div class="content-grid">
+          <section class="panel map-panel"><div class="panel-heading"><div><h2>مواقع الأسطول</h2><p>نظرة جغرافية على المركبات</p></div><a href="#map-view" data-view="map" class="text-link">عرض الخريطة الكاملة ↗</a></div><div id="overviewMap" class="map-canvas"></div><div class="map-legend"><span><i class="legend-dot moving"></i> تتحرك</span><span><i class="legend-dot stopped"></i> متوقفة</span><span><i class="legend-dot offline"></i> غير متصلة</span></div></section>
+          <section class="panel activity-panel"><div class="panel-heading"><div><h2>آخر النشاطات</h2><p>ملخص آخر الأحداث المسجلة</p></div><button class="more-btn" aria-label="المزيد">•••</button></div><div class="activity-list" id="activityList"><div class="activity-item"><span class="activity-icon green">↗</span><div><b>بدأت مركبة رحلة جديدة</b><p>شاحنة التوزيع 04 · عمّان</p><small>قبل 4 دقائق</small></div></div><div class="activity-item"><span class="activity-icon amber">Ⅱ</span><div><b>توقف مركبة</b><p>مركبة الخدمات 02 · الزرقاء</p><small>قبل 18 دقيقة</small></div></div><div class="activity-item"><span class="activity-icon red">!</span><div><b>تنبيه: تجاوز منطقة جغرافية</b><p>سيارة النقل 11 · عمّان</p><small>قبل 32 دقيقة</small></div></div><div class="activity-item"><span class="activity-icon blue">◉</span><div><b>اتصال جهاز GPS</b><p>الجهاز TRK-009 · متصل</p><small>قبل ساعة</small></div></div></div></section>
+        </div>
+        <section class="panel table-panel"><div class="panel-heading"><div><h2>المركبات</h2><p>حالة أسطولك في الوقت الحالي</p></div><a href="#vehicles" data-view="vehicles" class="text-link">كل المركبات ↗</a></div><div class="table-wrap"><table><thead><tr><th>المركبة</th><th>رقم التسجيل</th><th>السائق</th><th>الحالة</th><th>آخر تحديث</th><th></th></tr></thead><tbody id="vehicleRows"></tbody></table></div></section>
+      </section>
+      <section class="page" id="page-map"><div class="section-heading"><div><h1>الخريطة المباشرة</h1><p class="muted">عرض مواقع المركبات المسجلة وآخر إحداثياتها.</p></div><button class="outline-btn" id="locateMe">⌖ موقعي الحالي</button></div><div class="panel full-map-panel"><div id="fullMap" class="full-map"></div></div></section>
+      <section class="page" id="page-vehicles"><div class="section-heading"><div><h1>إدارة المركبات</h1><p class="muted">إضافة المركبات ومراجعة حالتها وربطها بالأجهزة.</p></div><button class="primary-btn" id="vehiclesAddBtn">＋ إضافة مركبة</button></div><div class="panel table-panel"><div class="table-toolbar"><input id="vehicleSearch" type="search" placeholder="ابحث باسم المركبة أو رقم التسجيل"><span class="muted" id="vehicleCount"></span></div><div class="table-wrap"><table><thead><tr><th>المركبة</th><th>رقم التسجيل</th><th>السائق</th><th>الحالة</th><th>آخر تحديث</th></tr></thead><tbody id="allVehicleRows"></tbody></table></div></div></section>
+      <section class="page" id="page-devices"><div class="section-heading"><div><h1>أجهزة GPS</h1><p class="muted">إدارة أجهزة التتبع المستقلة المرتبطة بالمركبات.</p></div></div><div class="panel empty-state"><div class="empty-icon">◉</div><h3>إدارة الأجهزة من حسابك</h3><p>بعد ربط الموقع بالخادم وتسجيل الدخول، ستظهر هنا الأجهزة المرتبطة بالمركبات. يدعم الخادم الأولي بروتوكولات JSON وNMEA وGT06 عبر بوابة HTTPS.</p><button class="outline-btn" id="deviceLogin">تسجيل الدخول وربط الخادم</button></div></section>
+      <section class="page" id="page-trips"><div class="section-heading"><div><h1>الرحلات والسجل</h1><p class="muted">مراجعة الرحلات والمسارات والتوقفات المسجلة.</p></div></div><div class="panel empty-state"><div class="empty-icon">↗</div><h3>سجل الرحلات</h3><p>تتوفر واجهات API أولية لسجل الرحلات والمسارات والتوقفات. ستظهر النتائج بعد اختيار مركبة وربط الحساب بالخادم.</p><button class="primary-btn" id="tripsLogin">ربط الحساب</button></div></section>
+      <section class="page" id="page-alerts"><div class="section-heading"><div><h1>التنبيهات</h1><p class="muted">متابعة أحداث الأسطول والتنبيهات المهمة.</p></div></div><div class="panel empty-state"><div class="empty-icon">♧</div><h3>مركز التنبيهات</h3><p>واجهة التنبيهات المتقدمة وقواعد المناطق الجغرافية ستُفعّل عند استكمال خدمات التنبيهات في الخادم.</p></div></section>
+      <section class="page" id="page-reports"><div class="section-heading"><div><h1>التقارير</h1><p class="muted">تقارير التشغيل والمسافات واستخدام الأسطول.</p></div></div><div class="panel empty-state"><div class="empty-icon">▤</div><h3>التقارير والتحليلات</h3><p>سيتم ربط التقارير ببيانات الرحلات الفعلية بعد تفعيل خدمات التحليلات على الخادم.</p></div></section>
+      <section class="page" id="page-settings"><div class="section-heading"><div><h1>الإعدادات والربط</h1><p class="muted">إعداد اتصال الواجهة بخادم دَرْب GPS.</p></div></div><div class="panel settings-panel"><div class="settings-intro"><h2>اتصال API</h2><p>أدخل عنوان الخادم المنشور. لا تضع مفاتيح سرية أو كلمات مرور في هذه الصفحة أو في مستودع GitHub.</p></div><label for="apiBase">عنوان الخادم (API Base URL)</label><input id="apiBase" type="url" placeholder="https://api.example.com/api/v1"><label for="orgId">معرّف المؤسسة (Organization ID)</label><input id="orgId" type="text" placeholder="UUID للمؤسسة"><div class="settings-actions"><button class="primary-btn" id="saveSettings">حفظ الإعدادات</button><button class="outline-btn" id="testConnection">اختبار الاتصال</button></div><p id="settingsMessage" class="settings-message" role="status"></p><div class="settings-warning"><b>ملاحظة مهمة:</b> الموقع الثابت على GitHub Pages لا يستضيف قاعدة البيانات أو الخادم. يجب نشر Backend بشكل مستقل مع HTTPS وضبط CORS للسماح بنطاق GitHub Pages.</div></div></section>
+      <footer class="footer"><span>© 2026 دَرْب GPS</span><span>منصة موحدة للملاحة والتتبع وإدارة الأساطيل</span><span class="version">WEB ALPHA 1.0</span></footer>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="loginModal" aria-hidden="true"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" id="closeLogin" aria-label="إغلاق">×</button><div class="modal-brand">د</div><h2 id="loginTitle">تسجيل الدخول إلى دَرْب</h2><p>استخدم حساباً تم إنشاؤه مسبقاً على خادم دَرْب.</p><form id="loginForm"><label for="identifier">البريد الإلكتروني أو الهاتف</label><input id="identifier" autocomplete="username" required placeholder="name@example.com"><label for="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" required placeholder="••••••••"><button class="primary-btn full-width" type="submit">تسجيل الدخول</button><p id="loginMessage" class="form-message" role="status"></p></form><small>لا يوجد تسجيل عام في نسخة الخادم الحالية؛ تتم تهيئة الحسابات إدارياً.</small></div></div>
+  <div class="modal-backdrop" id="vehicleModal" aria-hidden="true"><div class="modal"><button class="modal-close" id="closeVehicle" aria-label="إغلاق">×</button><h2>إضافة مركبة</h2><p>أدخل بيانات المركبة لإضافتها إلى المؤسسة المحددة.</p><form id="vehicleForm"><label for="vehicleName">اسم المركبة</label><input id="vehicleName" required placeholder="مثال: شاحنة التوزيع 05"><label for="vehiclePlate">رقم التسجيل</label><input id="vehiclePlate" required placeholder="12-34567"><button class="primary-btn full-width" type="submit">حفظ المركبة</button><p id="vehicleMessage" class="form-message" role="status"></p></form></div></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="assets/app.js"></script>
+</body></html>

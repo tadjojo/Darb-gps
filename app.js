@@ -64,6 +64,13 @@ function connectDarbRealtime() {
 
   darbSocket.on('connect', () => {
     console.log('DARB: Live tracking connected');
+    vehicles
+  .filter(v => v.id && !String(v.id).startsWith('demo-'))
+  .forEach(v => {
+    darbSocket.emit('vehicle.join', {
+      vehicleId: v.id
+    });
+  });
   });
 
   darbSocket.on('vehicle.location.updated', event => {

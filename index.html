@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
@@ -58,5 +58,5 @@
   <div class="modal-backdrop" id="loginModal" aria-hidden="true"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle"><button class="modal-close" id="closeLogin" aria-label="إغلاق">×</button><div class="modal-brand">د</div><h2 id="loginTitle">تسجيل الدخول إلى دَرْب</h2><p>استخدم حساباً تم إنشاؤه مسبقاً على خادم دَرْب.</p><form id="loginForm"><label for="identifier">البريد الإلكتروني أو الهاتف</label><input id="identifier" autocomplete="username" required placeholder="name@example.com"><label for="password">كلمة المرور</label><input id="password" type="password" autocomplete="current-password" required placeholder="••••••••"><button class="primary-btn full-width" type="submit">تسجيل الدخول</button><p id="loginMessage" class="form-message" role="status"></p></form><small>لا يوجد تسجيل عام في نسخة الخادم الحالية؛ تتم تهيئة الحسابات إدارياً.</small></div></div>
   <div class="modal-backdrop" id="vehicleModal" aria-hidden="true"><div class="modal"><button class="modal-close" id="closeVehicle" aria-label="إغلاق">×</button><h2>إضافة مركبة</h2><p>أدخل بيانات المركبة لإضافتها إلى المؤسسة المحددة.</p><form id="vehicleForm"><label for="vehicleName">اسم المركبة</label><input id="vehicleName" required placeholder="مثال: شاحنة التوزيع 05"><label for="vehiclePlate">رقم التسجيل</label><input id="vehiclePlate" required placeholder="12-34567"><button class="primary-btn full-width" type="submit">حفظ المركبة</button><p id="vehicleMessage" class="form-message" role="status"></p></form></div></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="assets/app.js"></script>
+  <script src="app.js"></script>
 </body></html>

@@ -1,6 +1,8 @@
 
+
 import {
   Body,
+  BadRequestException,
   Controller,
   HttpCode,
   Post,
@@ -28,9 +30,9 @@ export class AuthController {
       !body.identifier.trim() ||
       !body.password
     ) {
-      return {
-        message: 'يرجى إدخال البريد الإلكتروني أو الهاتف وكلمة المرور',
-      };
+      throw new BadRequestException(
+        'يرجى إدخال البريد الإلكتروني أو الهاتف وكلمة المرور',
+      );
     }
 
     return this.authService.login(

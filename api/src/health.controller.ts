@@ -1,7 +1,20 @@
-import { Controller, Get } from '@nestjs/common';
+
+import {
+  Controller,
+  Get,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { Pool } from 'pg';
+import { DATABASE_POOL } from './database/database.module';
 
 @Controller('health')
 export class HealthController {
+  constructor(
+    @Inject(DATABASE_POOL)
+    private readonly database: Pool,
+  ) {}
+
   @Get('live')
   live() {
     return {
@@ -12,10 +25,19 @@ export class HealthController {
   }
 
   @Get('ready')
-  ready() {
-    return {
-      status: 'ready',
-      database: 'not-configured',
-    };
+  async ready() {
+    try {
+      await this.database.query('SELECT 1');
+
+      return {
+        status: 'ready',
+        database: 'connected',
+      };
+    } catch {
+      throw new ServiceUnavailableException({
+        status: 'not-ready',
+        database: 'disconnected',
+      });
+    }
   }
 }

@@ -1,30 +1,55 @@
 
-import { Global, Module } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Injectable,
+  Logger,
+  Module,
+  OnApplicationShutdown,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
+import { PG_POOL } from './database.constants';
 
-export const DATABASE_POOL = 'DATABASE_POOL';
+@Injectable()
+class DatabaseShutdown implements OnApplicationShutdown {
+  private readonly logger = new Logger(DatabaseShutdown.name);
+
+  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.pool.end();
+    this.logger.log('PostgreSQL pool closed');
+  }
+}
 
 @Global()
 @Module({
   providers: [
     {
-      provide: DATABASE_POOL,
-      useFactory: () => {
-        const connectionString = process.env.DATABASE_URL;
-
-        if (!connectionString) {
-          throw new Error('DATABASE_URL is not configured');
-        }
-
-        return new Pool({
-          connectionString,
-          ssl: { rejectUnauthorized: false },
-          max: 10,
-          connectionTimeoutMillis: 10000,
-        });
-      },
+      provide: PG_POOL,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): Pool =>
+        new Pool({
+          connectionString: config.getOrThrow<string>('DATABASE_URL'),
+          max: config.get<number>('DB_POOL_MAX', 10),
+          idleTimeoutMillis: config.get<number>(
+            'DB_IDLE_TIMEOUT_MS',
+            30000,
+          ),
+          connectionTimeoutMillis: config.get<number>(
+            'DB_CONNECTION_TIMEOUT_MS',
+            5000,
+          ),
+          application_name: 'darb-gps-api',
+          ssl:
+            config.get<string>('NODE_ENV') === 'production'
+              ? { rejectUnauthorized: true }
+              : undefined,
+        }),
     },
+    DatabaseShutdown,
   ],
-  exports: [DATABASE_POOL],
+  exports: [PG_POOL],
 })
 export class DatabaseModule {}

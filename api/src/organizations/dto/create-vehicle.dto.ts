@@ -8,16 +8,11 @@ import {
 export class CreateVehicleDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(30)
-  plateNumber!: string;
-
-  @IsString()
-  @IsNotEmpty()
   @MaxLength(100)
-  name!: string;
+  displayName!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  description?: string;
+  @MaxLength(30)
+  registrationNumber?: string;
 }

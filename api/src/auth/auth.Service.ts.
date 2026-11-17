@@ -1,5 +1,10 @@
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+
+import {
+  Injectable,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
@@ -9,9 +14,10 @@ export class AuthService {
     const key = process.env.SUPABASE_PUBLISHABLE_KEY;
 
     if (!url || !key) {
-      throw new Error('Supabase environment variables are missing');
+      throw new InternalServerErrorException(
+        'Supabase environment variables are missing',
+      );
     }
-
 
     return createClient(url, key, {
       auth: {
@@ -45,5 +51,4 @@ export class AuthService {
     };
   }
 }
-
 

@@ -1,23 +1,17 @@
 import {
   IsNotEmpty,
-  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 
-export class CreateVehicleDto {
+export class CreateOrganizationDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(30)
-  plateNumber!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
+  @MaxLength(150)
   name!: string;
 
-  @IsOptional()
   @IsString()
-  @MaxLength(100)
-  description?: string;
+  @IsNotEmpty()
+  @MaxLength(50)
+  type!: string;
 }

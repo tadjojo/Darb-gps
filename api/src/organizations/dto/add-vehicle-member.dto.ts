@@ -11,6 +11,6 @@ export class AddVehicleMemberDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(['owner', 'admin', 'driver', 'viewer'])
+  @IsIn(['owner', 'manager', 'driver', 'viewer'])
   role!: string;
 }

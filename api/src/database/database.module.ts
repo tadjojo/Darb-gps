@@ -8,6 +8,7 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
 import { PG_POOL } from './database.constants';
 
@@ -43,9 +44,15 @@ class DatabaseShutdown implements OnApplicationShutdown {
           ),
           application_name: 'darb-gps-api',
           ssl:
-            config.get<string>('NODE_ENV') === 'production'
-              ? { rejectUnauthorized: true }
-              : undefined,
+  config.get<string>('NODE_ENV') === 'production'
+    ? {
+        ca: readFileSync(
+          '/etc/secrets/prod-supabase.cer',
+          'utf8',
+        ),
+        rejectUnauthorized: true,
+      }
+    : undefined,
         }),
     },
     DatabaseShutdown,

@@ -34,11 +34,15 @@ export class HealthController {
         status: 'ready',
         database: 'connected',
       };
-    } catch {
+       } catch (error: unknown) {
+      this.logger.error(
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error),
+      );
+
       throw new ServiceUnavailableException({
         status: 'not-ready',
         database: 'disconnected',
       });
     }
-  }
-}

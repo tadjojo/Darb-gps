@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Inject,
+  private readonly logger = new Logger(HealthController.name);
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Pool } from 'pg';

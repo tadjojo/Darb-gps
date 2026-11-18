@@ -10,7 +10,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
-import { readFileSync } from 'node:fs';
 import { PG_POOL } from './database.constants';
 
 @Injectable()
@@ -44,7 +43,7 @@ class DatabaseShutdown implements OnApplicationShutdown {
             5000,
           ),
           application_name: 'darb-gps-api',
-          sslssl:
+          ssl:
   config.get<string>('NODE_ENV') === 'production'
     ? {
         ca: readFileSync(

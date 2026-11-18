@@ -10,6 +10,7 @@ import { PG_POOL } from '../database/database.constants';
 
 @Controller('health')
 export class HealthController {
+    private readonly logger = new Logger(HealthController.name);
   constructor(
     @Inject(PG_POOL)
     private readonly database: Pool,

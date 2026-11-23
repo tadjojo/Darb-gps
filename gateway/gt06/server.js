@@ -28,7 +28,12 @@ function parseCidr(value) {
     throw new Error('TRUSTED_DEVICE_CIDRS must contain valid IPv4 CIDR ranges');
   }
   const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
-  return { network: (ip & mask) >>> 0, mask };
+  return { network: (ip & mask) >>> 0, mask, prefix };
+}
+
+function isCidrContained(source, trusted) {
+  return source.prefix >= trusted.prefix &&
+    ((source.network & trusted.mask) >>> 0) === trusted.network;
 }
 
 function isTrustedAddress(address, ranges) {
@@ -59,6 +64,11 @@ function loadConfig() {
   const trustedText = (process.env.TRUSTED_DEVICE_CIDRS || '').split(',').map(x => x.trim()).filter(Boolean);
   if (trustedText.length === 0) throw new Error('TRUSTED_DEVICE_CIDRS is required; do not expose IMEI-only login to the public internet');
   const trustedRanges = trustedText.map(parseCidr);
+  for (const device of devices.values()) {
+    if (device.sourceRanges.some(source => !trustedRanges.some(trusted => isCidrContained(source, trusted)))) {
+      throw new Error('Each GT06 sourceCidrs range must be fully contained within TRUSTED_DEVICE_CIDRS');
+    }
+  }
   const rawNmeaDevices = JSON.parse(process.env.NMEA_DEVICE_MAP_JSON || '{}');
   if (!rawNmeaDevices || typeof rawNmeaDevices !== 'object' || Array.isArray(rawNmeaDevices)) {
     throw new Error('NMEA_DEVICE_MAP_JSON must be a JSON object keyed by static source IPv4 address');
@@ -69,7 +79,17 @@ function loadConfig() {
         typeof value.bearerToken !== 'string' || value.bearerToken.length < 32) {
       throw new Error('Each NMEA device entry requires a static IPv4 source address and bearerToken of at least 32 characters');
     }
+    if (!trustedRanges.some(range => isTrustedAddress(sourceIp, [range]))) {
+      throw new Error('Each NMEA source IP must be inside TRUSTED_DEVICE_CIDRS');
+    }
     nmeaDevices.set(sourceIp, { sourceIp, bearerToken: value.bearerToken });
+  }
+  const bearerTokens = new Set();
+  for (const device of [...devices.values(), ...nmeaDevices.values()]) {
+    if (bearerTokens.has(device.bearerToken)) {
+      throw new Error('Each enrolled GPS device must use a unique bearer token');
+    }
+    bearerTokens.add(device.bearerToken);
   }
   const port = Number(process.env.GT06_PORT || 5023);
   const nmeaPort = Number(process.env.NMEA_PORT || 5024);
@@ -295,4 +315,4 @@ if (require.main === module) {
   process.once('SIGINT', shutdown);
 }
 
-module.exports = { createGateway, createNmeaGateway, isTrustedAddress, parseCidr, loadConfig };
+module.exports = { createGateway, createNmeaGateway, isTrustedAddress, isCidrContained, parseCidr, loadConfig };

@@ -38,6 +38,9 @@ jobs:
       - name: Test GT06 TCP gateway source filtering
         run: node --test gateway/gt06/test/server.test.cjs
 
+      - name: Test TCP gateway healthcheck
+        run: node --test gateway/gt06/test/healthcheck.test.cjs
+
       - name: Validate TCP gateway Compose deployment
         run: |
           cp gateway/gt06/deploy/.env.example gateway/gt06/deploy/.env

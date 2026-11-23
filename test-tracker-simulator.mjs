@@ -1,58 +1,62 @@
 #!/usr/bin/env node
-// Dependency-free smoke test for the independent GPS simulator.
+// Local contract test: verifies that the simulator sends each protocol to the real API route shape.
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const simulator = path.join(here, 'simulate-tracker.mjs');
-const seen = new Set();
-let requests = 0;
-let duplicates = 0;
-
+const simulator = path.join(path.dirname(fileURLToPath(import.meta.url)), 'simulate-tracker.mjs');
+const requests = [];
 const server = http.createServer(async (req, res) => {
-  let body = '';
-  for await (const chunk of req) body += chunk;
-  try {
-    const parsed = JSON.parse(body);
-    const payload = typeof parsed.payload === 'string' ? JSON.parse(parsed.payload) : parsed.payload;
-    if (parsed.protocol !== 'json' || !payload?.latitude || !payload?.longitude) {
-      res.writeHead(400).end('invalid test payload');
-      return;
-    }
-    requests += 1;
-    const key = JSON.stringify(payload);
-    const duplicate = seen.has(key);
-    if (duplicate) duplicates += 1;
-    else seen.add(key);
-    res.writeHead(202, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ accepted: true, duplicate }));
-  } catch {
-    res.writeHead(400).end('invalid JSON');
-  }
+  let raw = '';
+  for await (const chunk of req) raw += chunk;
+  requests.push({ method: req.method, url: req.url, authorization: req.headers.authorization,
+    contentType: req.headers['content-type'], body: JSON.parse(raw) });
+  res.writeHead(202, { 'content-type': 'application/json' }).end('{"accepted":true}');
 });
-
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const { port } = server.address();
-const child = spawn(process.execPath, [simulator,
-  '--url', `http://127.0.0.1:${port}/ingest`,
-  '--credential', 'local-smoke-test-only',
-  '--protocol', 'json', '--repeat', '3', '--duplicate', 'true', '--interval-ms', '0'],
-{ stdio: ['ignore', 'pipe', 'pipe'] });
-let stdout = '';
-let stderr = '';
-child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
-child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
-const exitCode = await new Promise((resolve, reject) => {
-  child.once('error', reject);
-  child.once('close', resolve);
-});
-await new Promise((resolve) => server.close(resolve));
-
-if (exitCode !== 0 || requests !== 6 || duplicates !== 3 || seen.size !== 3) {
-  console.error({ exitCode, requests, duplicates, uniqueEvents: seen.size, stdout, stderr });
-  process.exit(1);
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const base = `http://127.0.0.1:${server.address().port}/api/v1`;
+function run(protocol, extra = []) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [simulator, '--url', base, '--credential', 'local-test-token',
+      '--protocol', protocol, '--interval-ms', '0', ...extra], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8').on('data', chunk => stdout += chunk);
+    child.stderr.setEncoding('utf8').on('data', chunk => stderr += chunk);
+    child.once('error', reject);
+    child.once('close', code => resolve({ code, stdout, stderr }));
+  });
 }
-console.log('PASS tracker simulator smoke test');
-console.log(`requests=${requests}; uniqueEvents=${seen.size}; duplicateEvents=${duplicates}`);
+const fixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'darb-sim-test-'));
+const gt06Fixture = path.join(fixtureDir, 'gt06-frame.hex');
+await fs.writeFile(gt06Fixture, '00'.repeat(20));
+try {
+  const json = await run('json');
+  const nmea = await run('nmea0183');
+  const gt06 = await run('gt06', ['--payload-file', gt06Fixture]);
+  for (const [name, result] of [['json', json], ['nmea', nmea], ['gt06', gt06]]) {
+    if (result.code !== 0) throw new Error(`${name} simulator failed: ${result.stdout} ${result.stderr}`);
+  }
+  const expected = [
+    ['/api/v1/device-gateway/ingest', 'json'],
+    ['/api/v1/device-gateway/ingest/nmea', 'nmea'],
+    ['/api/v1/device-gateway/ingest/gt06', 'gt06'],
+  ];
+  for (let i = 0; i < expected.length; i++) {
+    const request = requests[i];
+    if (request.method !== 'POST' || request.url !== expected[i][0] ||
+        request.authorization !== 'Bearer local-test-token' || request.contentType !== 'application/json') {
+      throw new Error(`Incorrect ${expected[i][1]} request contract: ${JSON.stringify(request)}`);
+    }
+  }
+  const [jsonBody, nmeaBody, gt06Body] = requests.map(x => x.body);
+  if (typeof jsonBody.latitude !== 'number' || typeof jsonBody.longitude !== 'number' || !jsonBody.recordedAt) throw new Error('JSON body does not match TrackerLocationDto');
+  if (typeof nmeaBody.sentence !== 'string' || !/^\$.*\*[0-9A-Fa-f]{2}$/.test(nmeaBody.sentence)) throw new Error('NMEA body does not match NmeaIngestDto');
+  if (typeof gt06Body.frameHex !== 'string' || !/^(?:[0-9a-fA-F]{2})+$/.test(gt06Body.frameHex)) throw new Error('GT06 body does not match Gt06IngestDto');
+  console.log('PASS simulator API contracts: JSON, NMEA 0183, GT06');
+} finally {
+  await new Promise(resolve => server.close(resolve));
+  await fs.rm(fixtureDir, { recursive: true, force: true });
+}

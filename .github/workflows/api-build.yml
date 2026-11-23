@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "api/**"
+      - "simulate-tracker.mjs"
+      - "test-tracker-simulator.mjs"
+      - "package.json"
       - "gateway/gt06/**"
       - ".github/workflows/api-build.yml"
       - ".github/workflows/static.yml"
@@ -36,6 +39,9 @@ jobs:
       - name: Build API and run GPS protocol parser tests
         working-directory: api
         run: npm run test:protocols
+
+      - name: Test tracker simulator API contracts
+        run: node test-tracker-simulator.mjs
 
       - name: Test GT06 TCP gateway source filtering
         run: node --test gateway/gt06/test/server.test.cjs

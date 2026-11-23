@@ -34,7 +34,7 @@
       });
     });
 }$('loginForm').reset();}catch(err){$('loginMessage').textContent=err.message;}}
-  async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(e){console.warn('Logout request failed',e);}if (darbSocket) {
+  async function logout(){if (darbSocket) {
   darbSocket.disconnect();
   darbSocket = null;
 }token='';refreshToken='';sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}

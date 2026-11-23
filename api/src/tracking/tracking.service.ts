@@ -154,6 +154,29 @@ export class TrackingService {
     return { revoked: true, deviceId };
   }
 
+  async rotateGpsTrackerCredential(user: AuthenticatedUser, deviceId: string) {
+    const secret = randomBytes(32).toString('base64url');
+    const credentialHash = createHash('sha256').update(secret).digest('hex');
+    const result = await this.pool.query(
+      `UPDATE private.darb_tracking_devices d
+          SET credential_hash = $3
+        WHERE d.id = $1 AND d.status = 'active'
+          AND EXISTS (SELECT 1 FROM vehicle_members vm
+            WHERE vm.vehicle_id = d.vehicle_id AND vm.user_id = $2
+              AND vm.status = 'active' AND vm.role IN ('owner','manager'))
+        RETURNING d.id, d.vehicle_id, d.protocol`,
+      [deviceId, user.sub, credentialHash],
+    );
+    if (!result.rowCount) throw new NotFoundException('Device not found or permission denied');
+    return {
+      deviceId: result.rows[0].id,
+      protocol: result.rows[0].protocol,
+      credential: secret,
+      credentialFormat: 'Authorization: Bearer <credential>',
+      warning: 'Previous credential is invalid immediately. Store this new credential securely; it is shown only once.',
+    };
+  }
+
   async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto, protocol: 'json' | 'gt06' | 'nmea' = 'json') {
     if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     const secret = authorization.replace(/^Bearer\s+/i, '').trim();

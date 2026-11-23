@@ -32,6 +32,11 @@ export class TrackingController {
     });
   }
 
+  @Post('devices/gps/:deviceId/rotate-credential')
+  rotateGpsTrackerCredential(@CurrentUser() user: AuthenticatedUser, @Param('deviceId', new ParseUUIDPipe()) deviceId: string) {
+    return this.tracking.rotateGpsTrackerCredential(user, deviceId);
+  }
+
   @Post('devices/gps/:deviceId/revoke')
   revokeGpsTracker(@CurrentUser() user: AuthenticatedUser, @Param('deviceId', new ParseUUIDPipe()) deviceId: string) {
     return this.tracking.revokeGpsTracker(user, deviceId);

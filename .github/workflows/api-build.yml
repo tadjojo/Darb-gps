@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "api/**"
+      - "app.js"
       - "simulate-tracker.mjs"
       - "test-tracker-simulator.mjs"
       - "package.json"
@@ -39,6 +40,9 @@ jobs:
       - name: Build API and run GPS protocol parser tests
         working-directory: api
         run: npm run test:protocols
+
+      - name: Validate web application JavaScript syntax
+        run: node --check app.js
 
       - name: Test tracker simulator API contracts
         run: node test-tracker-simulator.mjs

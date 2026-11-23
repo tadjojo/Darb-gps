@@ -7,7 +7,7 @@ class DarbClient {
   final FlutterSecureStorage storage;
   String? _baseUrl;
 
-  Future<String> get baseUrl async => _baseUrl ??= (await storage.read(key: 'api_base_url') ?? 'http://10.0.2.2:3000').replaceAll(RegExp(r'/+$'), '');
+  Future<String> get baseUrl async => _baseUrl ??= (await storage.read(key: 'api_base_url') ?? 'https://darb-gps-x.onrender.com').replaceAll(RegExp(r'/+$'), '');
   Future<void> setBaseUrl(String value) async {
     final normalized = value.trim().replaceAll(RegExp(r'/+$'), '');
     if (!normalized.startsWith('https://') && !normalized.startsWith('http://')) {

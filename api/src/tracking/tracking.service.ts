@@ -165,30 +165,55 @@ export class TrackingService {
     if (!Number.isFinite(recorded) || recorded > now + 5 * 60_000 || recorded < now - 7 * 24 * 60 * 60_000) {
       throw new BadRequestException('GPS timestamp is outside the accepted seven-day window');
     }
-    await this.assertAccess(user.sub, dto.vehicleId, true);
     if (dto.accuracyMeters !== undefined && dto.accuracyMeters > 250) throw new BadRequestException('GPS accuracy is too low');
-    if (dto.deviceId) {
-      const device = await this.pool.query(
-        `SELECT id FROM private.darb_mobile_devices
-          WHERE id = $1 AND vehicle_id = $2 AND user_id = $3 AND status = 'active'`,
-        [dto.deviceId, dto.vehicleId, user.sub],
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const access = await client.query(
+        `SELECT v.id, v.status AS vehicle_status, vm.role
+           FROM public.vehicles v
+           JOIN public.vehicle_members vm ON vm.vehicle_id = v.id
+          WHERE v.id = $1 AND vm.user_id = $2 AND vm.status = 'active'
+          FOR SHARE OF v, vm`,
+        [dto.vehicleId, user.sub],
       );
-      if (!device.rowCount) throw new ForbiddenException('Mobile device is not enrolled for this user and vehicle');
+      const membership = access.rows[0];
+      if (!membership || membership.vehicle_status !== 'active') throw new NotFoundException('Vehicle not found');
+      if (!['owner', 'manager', 'driver'].includes(membership.role)) throw new ForbiddenException('Insufficient vehicle permissions');
+      if (dto.deviceId) {
+        const device = await client.query(
+          `SELECT id FROM private.darb_mobile_devices
+            WHERE id = $1 AND vehicle_id = $2 AND user_id = $3 AND status = 'active'
+            FOR SHARE`,
+          [dto.deviceId, dto.vehicleId, user.sub],
+        );
+        if (!device.rowCount) throw new ForbiddenException('Mobile device is not enrolled for this user and vehicle');
+      }
+      const result = await client.query(
+        `INSERT INTO public.vehicle_locations
+          (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'mobile')
+         ON CONFLICT (vehicle_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
+         RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
+        [dto.vehicleId, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt, dto.eventId ?? null],
+      );
+      if (!result.rowCount) {
+        await client.query('COMMIT');
+        return { accepted: true, duplicate: true, eventId: dto.eventId };
+      }
+      if (dto.deviceId) await client.query(
+        'UPDATE private.darb_mobile_devices SET last_seen_at = now() WHERE id = $1',
+        [dto.deviceId],
+      );
+      await client.query('COMMIT');
+      await this.publishIfLatest(result.rows[0]);
+      return { accepted: true, duplicate: false, location: result.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
     }
-    const result = await this.pool.query(
-      `INSERT INTO public.vehicle_locations (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'mobile')
-       ON CONFLICT (vehicle_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
-       RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
-      [dto.vehicleId, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt, dto.eventId ?? null],
-    );
-    if (!result.rowCount) return { accepted: true, duplicate: true, eventId: dto.eventId };
-    if (dto.deviceId) await this.pool.query(
-      'UPDATE private.darb_mobile_devices SET last_seen_at = now() WHERE id = $1',
-      [dto.deviceId],
-    );
-    await this.publishIfLatest(result.rows[0]);
-    return { accepted: true, duplicate: false, location: result.rows[0] };
   }
 
   async latest(user: AuthenticatedUser, vehicleId: string) {

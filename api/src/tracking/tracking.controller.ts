@@ -41,6 +41,38 @@ export class TrackingController {
     return this.tracking.latest(user, vehicleId);
   }
 
+  @Get('vehicles/:vehicleId/trips')
+  trips(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('limit') limit = '50',
+  ) {
+    return this.tracking.getTrips(user, vehicleId, from, to, Number(limit));
+  }
+
+  @Get('vehicles/:vehicleId/trip-route')
+  tripRoute(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.tracking.getTripRoute(user, vehicleId, from, to);
+  }
+
+  @Get('vehicles/:vehicleId/stops')
+  stops(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('limit') limit = '100',
+  ) {
+    return this.tracking.getStops(user, vehicleId, from, to, Number(limit));
+  }
+
   @Get('vehicles/:vehicleId/history')
   history(
     @CurrentUser() user: AuthenticatedUser,

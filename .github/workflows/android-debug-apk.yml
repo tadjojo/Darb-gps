@@ -37,6 +37,24 @@ jobs:
           cache: true
       - name: Generate Android runner
         run: flutter create --platforms=android --org com.darb --project-name darb_gps .
+      - name: Configure Android location permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          marker = '<manifest'
+          permissions = '''
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+          '''
+          if 'android.permission.ACCESS_FINE_LOCATION' not in text:
+              text = text.replace('    <application', permissions + '\\n    <application', 1)
+          path.write_text(text)
+          PY
       - name: Install project tests
         run: |
           cat > test/widget_test.dart <<'EOF'

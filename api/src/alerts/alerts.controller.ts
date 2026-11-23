@@ -21,6 +21,12 @@ export class AlertsController {
     return this.alerts.acknowledge(user, alertId);
   }
 
+  @Patch(':alertId/resolve')
+  resolve(@CurrentUser() user: AuthenticatedUser,
+          @Param('alertId', new ParseUUIDPipe()) alertId: string) {
+    return this.alerts.resolve(user, alertId);
+  }
+
   @Get('rules')
   rules(@CurrentUser() user: AuthenticatedUser, @Query('vehicleId') vehicleId?: string) {
     return this.alerts.rules(user, vehicleId);

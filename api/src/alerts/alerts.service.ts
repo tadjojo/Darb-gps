@@ -11,6 +11,7 @@ export class AlertsService {
 
   async list(user: AuthenticatedUser, status?: string, vehicleId?: string, limit = 100) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new BadRequestException('Alert limit must be 1..200');
+    if (vehicleId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleId)) throw new BadRequestException('Invalid vehicle ID');
     if (status && !['open', 'acknowledged', 'resolved'].includes(status)) throw new BadRequestException('Invalid alert status');
     const result = await this.pool.query(
       `SELECT a.id, a.vehicle_id, v.display_name AS vehicle_name, v.registration_number,
@@ -44,7 +45,24 @@ export class AlertsService {
     return result.rows[0];
   }
 
+  async resolve(user: AuthenticatedUser, alertId: string) {
+    const result = await this.pool.query(
+      `UPDATE private.darb_alerts a
+          SET status = 'resolved'
+        WHERE a.id = $1 AND a.status IN ('open', 'acknowledged')
+          AND EXISTS (
+            SELECT 1 FROM public.vehicle_members vm
+             WHERE vm.vehicle_id = a.vehicle_id AND vm.user_id = $2 AND vm.status = 'active'
+          )
+        RETURNING a.id, a.status`,
+      [alertId, user.sub],
+    );
+    if (!result.rowCount) throw new NotFoundException('Alert not found or access denied');
+    return result.rows[0];
+  }
+
   async rules(user: AuthenticatedUser, vehicleId?: string) {
+    if (vehicleId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleId)) throw new BadRequestException('Invalid vehicle ID');
     const result = await this.pool.query(
       `SELECT r.id, r.vehicle_id, v.display_name AS vehicle_name, r.rule_type,
               r.name, r.config, r.enabled, r.created_at, r.updated_at
@@ -60,9 +78,10 @@ export class AlertsService {
   }
 
   async createRule(user: AuthenticatedUser, input: RuleInput) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new BadRequestException('Invalid rule payload');
     const name = typeof input.name === 'string' ? input.name.trim() : '';
     if (!name || name.length > 120) throw new BadRequestException('Rule name must be 1..120 characters');
-    if (!input.vehicleId || !['speed_limit', 'geofence'].includes(input.type)) throw new BadRequestException('Invalid rule type or vehicle');
+    if (typeof input.vehicleId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.vehicleId) || !['speed_limit', 'geofence'].includes(input.type)) throw new BadRequestException('Invalid rule type or vehicle');
     const access = await this.pool.query(
       `SELECT v.organization_id, vm.role
          FROM public.vehicles v

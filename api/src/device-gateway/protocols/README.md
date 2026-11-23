@@ -30,7 +30,7 @@ listener implements the model-specific login handshake.
 All endpoints require the enrolled per-device Bearer credential and reject a
 protocol that differs from the device's stored profile. GT06 uses that device's
 timezone offset; no service-wide timezone setting is used. GGA requires a
-trusted paired UTC timestamp. Only the classic 0x7878 / 0x12 GT06 location
+trusted paired UTC timestamp. Only the classic 0x7878 or extended 0x7979 framing with the 0x12 GT06 location
 profile is currently supported.
 
 ## TCP gateway boundary

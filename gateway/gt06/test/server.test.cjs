@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const net = require('node:net');
 const { once } = require('node:events');
-const { isTrustedAddress, parseCidr, createGateway } = require('../server');
+const { isTrustedAddress, parseCidr, createGateway, createNmeaGateway } = require('../server');
 const { crc16Itt, buildGt06Ack } = require('../../../api/dist/device-gateway/protocols/gt06.parser');
 
 test('GT06 gateway validates IPv4 CIDR ranges', () => {
@@ -78,6 +78,50 @@ test('GT06 TCP gateway logs in, forwards heartbeat/location, and ACKs only accep
     assert.equal(calls[1].url, 'https://darb-api.example/api/v1/device-gateway/ingest/gt06');
     for (const call of calls) assert.equal(call.options.headers.authorization, 'Bearer ' + token);
     assert.deepEqual(JSON.parse(calls[1].options.body), { frameHex: location.toString('hex') });
+  } finally {
+    socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+function makeNmea(body) {
+  let checksum = 0;
+  for (const character of body) checksum ^= character.charCodeAt(0);
+  return '$' + body + '*' + checksum.toString(16).padStart(2, '0').toUpperCase() + '\\r\\n';
+}
+
+test('NMEA TCP gateway maps a trusted source IP and forwards RMC with paired GGA', async () => {
+  const calls = [];
+  let resolveCalls;
+  const bothCalls = new Promise(resolve => { resolveCalls = resolve; });
+  const token = 'test-nmea-device-bearer-token-012345';
+  const server = createNmeaGateway({
+    apiBase: 'https://darb-api.example/api/v1',
+    nmeaDevices: new Map([['127.0.0.1', { sourceIp: '127.0.0.1', bearerToken: token }]]),
+    trustedRanges: [parseCidr('127.0.0.1/32')],
+    maxConnections: 10,
+    idleTimeoutMs: 30000,
+  }, async (url, options) => {
+    calls.push({ url, options });
+    if (calls.length === 2) resolveCalls();
+    return { ok: true, status: 200, text: async () => '' };
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const socket = net.createConnection(server.address().port, '127.0.0.1');
+  try {
+    await once(socket, 'connect');
+    const rmc = makeNmea('GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,,,A');
+    const gga = makeNmea('GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,');
+    socket.write(rmc + gga);
+    await Promise.race([bothCalls, new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for NMEA forwarding')), 3000))]);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, 'https://darb-api.example/api/v1/device-gateway/ingest/nmea');
+    assert.equal(calls[1].url, calls[0].url);
+    assert.equal(calls[0].options.headers.authorization, 'Bearer ' + token);
+    assert.equal(calls[1].options.headers.authorization, 'Bearer ' + token);
+    assert.deepEqual(JSON.parse(calls[0].options.body), { sentence: rmc.trim() });
+    assert.deepEqual(JSON.parse(calls[1].options.body), { sentence: gga.trim(), pairedUtcTimestamp: '1994-03-23T12:35:19.000Z' });
   } finally {
     socket.destroy();
     await new Promise(resolve => server.close(resolve));

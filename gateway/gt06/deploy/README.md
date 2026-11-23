@@ -96,6 +96,9 @@ docker compose down
 - The gateway configuration currently loads the device credential maps at
   startup. Restart the service after enrolling, revoking, or rotating a device
   credential.
+- GT06 clients must complete their registered IMEI login within the absolute
+  `LOGIN_TIMEOUT_MS` window (default 15 seconds); sending incomplete bytes does
+  not extend this deadline.
 - On SIGTERM/SIGINT the gateway stops accepting new connections, allows a
   five-second drain window, then closes remaining tracker sockets so container
   shutdown cannot hang indefinitely.

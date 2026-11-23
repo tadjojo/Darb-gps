@@ -103,7 +103,9 @@ class NavigationService {
       final distance = _asFiniteDouble(route['distance']);
       final duration = _asFiniteDouble(route['duration']);
       if (points.length < 2 || distance == null || duration == null ||
-          !distance.isFinite || !duration.isFinite || distance < 0 || duration < 0) return null;
+          !distance.isFinite || !duration.isFinite || distance < 0 || duration < 0) {
+        return null;
+      }
       return NavigationRoute(
         distanceMeters: distance,
         durationSeconds: duration,

@@ -37,6 +37,35 @@ jobs:
           cache: true
       - name: Generate Android runner
         run: flutter create --platforms=android --org com.darb --project-name darb_gps .
+      - name: Install project tests
+        run: |
+          cat > test/widget_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:latlong2/latlong.dart';
+          import 'package:darb_gps/services/navigation_service.dart';
+
+          void main() {
+            group('NavigationService', () {
+              test('short search queries return an empty result', () async {
+                final service = NavigationService();
+                expect(await service.searchPlaces('ع'), isEmpty);
+                service.close();
+              });
+
+              test('invalid route coordinates are rejected before network access', () async {
+                final service = NavigationService();
+                await expectLater(
+                  service.getDrivingRoutes(
+                    const LatLng(91, 0),
+                    const LatLng(31, 36),
+                  ),
+                  throwsA(isA<NavigationException>()),
+                );
+                service.close();
+              });
+            });
+          }
+          EOF
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze Dart code

@@ -16,8 +16,8 @@
     "migration:create": "node-pg-migrate -m src/database/migrations create",
     "test:unit": "jest --runInBand --testPathPattern=unit",
     "test:integration": "jest --runInBand --testPathPattern=integration",
-    "simulate:tracker": "node scripts/simulate-tracker.mjs",
-    "test:simulator": "node scripts/test-tracker-simulator.mjs"
+    "simulate:tracker": "node simulate-tracker.mjs",
+    "test:simulator": "node test-tracker-simulator.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

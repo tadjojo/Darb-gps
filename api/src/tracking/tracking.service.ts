@@ -122,6 +122,7 @@ export class TrackingService {
        RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
       [dto.vehicleId, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt],
     );
+    await this.publishIfLatest(result.rows[0]);
     return { accepted: true, location: result.rows[0] };
   }
 

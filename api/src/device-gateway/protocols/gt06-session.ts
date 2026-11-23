@@ -23,11 +23,11 @@ export function handleGt06SessionFrame(
   }
   if (!authenticated) return { authenticated: false, close: true };
   if (frame.protocol === 0x13) {
-    return { authenticated: true, close: false, ack: buildGt06Ack(frame.protocol, frame.serial) };
+    return { authenticated: true, close: false, ack: buildGt06Ack(frame.protocol, frame.serial, frame.extended) };
   }
   if (frame.protocol === 0x12) {
     const location = parseGt06Location(frame);
-    return { authenticated: true, close: false, location, ack: buildGt06Ack(frame.protocol, frame.serial) };
+    return { authenticated: true, close: false, location, ack: buildGt06Ack(frame.protocol, frame.serial, frame.extended) };
   }
   return { authenticated: true, close: false };
 }

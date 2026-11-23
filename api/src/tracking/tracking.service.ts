@@ -66,11 +66,16 @@ export class TrackingService {
   async listDevices(user: AuthenticatedUser, vehicleId: string) {
     await this.assertAccess(user.sub, vehicleId);
     const result = await this.pool.query(
-      `SELECT id, vehicle_id, 'mobile'::text AS device_type, status, enrolled_at AS created_at, last_seen_at
+      `SELECT id, vehicle_id, 'mobile'::text AS device_type, status,
+              enrolled_at AS created_at, last_seen_at,
+              NULL::text AS label, NULL::text AS protocol,
+              NULL::text AS imei, NULL::text AS model,
+              NULL::integer AS timezone_offset_minutes
          FROM private.darb_mobile_devices WHERE vehicle_id = $1
        UNION ALL
-       SELECT id, vehicle_id, 'gps_tracker'::text AS device_type, status, created_at, last_seen_at,
-              label, protocol, imei, model, timezone_offset_minutes
+       SELECT id, vehicle_id, 'gps_tracker'::text AS device_type, status,
+              created_at, last_seen_at, label, protocol, imei, model,
+              timezone_offset_minutes
          FROM private.darb_tracking_devices WHERE vehicle_id = $1
        ORDER BY created_at DESC`,
       [vehicleId],

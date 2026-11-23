@@ -3,12 +3,23 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { IngestLocationDto } from './dto/ingest-location.dto';
+import { EnrollGpsTrackerDto } from './dto/enroll-gps-tracker.dto';
 import { TrackingService } from './tracking.service';
 
 @Controller('tracking')
 @UseGuards(JwtAuthGuard)
 export class TrackingController {
   constructor(private readonly tracking: TrackingService) {}
+
+  @Post('devices/gps')
+  enrollGpsTracker(@CurrentUser() user: AuthenticatedUser, @Body() dto: EnrollGpsTrackerDto) {
+    return this.tracking.enrollGpsTracker(user, dto.vehicleId, dto.label);
+  }
+
+  @Post('devices/gps/:deviceId/revoke')
+  revokeGpsTracker(@CurrentUser() user: AuthenticatedUser, @Param('deviceId', new ParseUUIDPipe()) deviceId: string) {
+    return this.tracking.revokeGpsTracker(user, deviceId);
+  }
 
   @Post('locations')
   ingest(@CurrentUser() user: AuthenticatedUser, @Body() dto: IngestLocationDto) {

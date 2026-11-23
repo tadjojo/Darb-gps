@@ -44,3 +44,19 @@ connection/rate limits, and forward normalized payloads over HTTPS.
 Render private services accept TCP only from Render's private network; they
 are not public endpoints for GPS hardware. Do not deploy a raw GPS listener
 there expecting internet-facing trackers.
+
+
+## GT06 login/session primitives
+
+The GT06 session helper decodes the common 0x01 BCD-IMEI login layout,
+compares the decoded 15-digit IMEI to the registered device profile, and
+builds the standard 0x7878 acknowledgement frame. It also requires an
+authenticated session before accepting heartbeat (0x13) and location (0x12)
+frames.
+
+**Security limitation:** IMEI is an identifier, not a secret. The common GT06
+login packet does not prove possession of the enrolled HTTPS bearer credential.
+The session helper is therefore not a complete public authentication boundary.
+Before exposing a raw TCP listener, deploy it behind a trusted APN/VPN or
+device-source network controls, or add a verified model-specific device
+authentication mechanism. Do not treat IMEI-only login as strong authentication.

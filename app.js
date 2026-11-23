@@ -8,7 +8,7 @@
     {id:'demo-4',name:'شاحنة الأسطول 08',plate:'45-11762',driver:'سامي يوسف',status:'offline',updated:'منذ ساعتين',lat:32.015,lng:35.728},
     {id:'demo-5',name:'مركبة المتابعة 06',plate:'12-66310',driver:'ليث محمود',status:'moving',updated:'منذ 5 دقائق',lat:31.71,lng:35.793}
   ];
-  let vehicles = [...demoVehicles], mapA, mapB, markers = [], token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '';
+  let vehicles = [...demoVehicles], mapA, mapB, markers = [], token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
   let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-x.onrender.com/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
   const statusText = {moving:'تتحرك',stopped:'متوقفة',offline:'غير متصلة'};
   const vehicleRow = v => `<tr><td><div class="vehicle-cell"><span class="vehicle-icon">▰</span>${escapeHtml(v.name)}</div></td><td dir="ltr">${escapeHtml(v.plate || '—')}</td><td>${escapeHtml(v.driver || '—')}</td><td><span class="status ${v.status}">${statusText[v.status] || 'غير معروف'}</span></td><td>${escapeHtml(v.updated || '—')}</td>${v.id?.startsWith('demo-')?'':'<td></td>'}</tr>`;
@@ -19,7 +19,49 @@
   function drawMarkers(){if(!window.L)return;[mapA,mapB].filter(Boolean).forEach(map=>{markers.filter(x=>x.map===map).forEach(x=>map.removeLayer(x.marker));markers=markers.filter(x=>x.map!==map);vehicles.forEach(v=>{if(!Number.isFinite(Number(v.lat))||!Number.isFinite(Number(v.lng)))return;const color=v.status==='moving'?'#159b70':v.status==='stopped'?'#d99522':'#8b97a8';const marker=L.circleMarker([v.lat,v.lng],{radius:8,color:'#fff',weight:2,fillColor:color,fillOpacity:1}).addTo(map).bindPopup(`<b>${escapeHtml(v.name)}</b><br>${statusText[v.status]||''}<br>${escapeHtml(v.updated||'')}`);markers.push({map,marker});});});}
   function updateStats(){ $('statVehicles').textContent=vehicles.length; $('statMoving').textContent=vehicles.filter(v=>v.status==='moving').length; $('statStopped').textContent=vehicles.filter(v=>v.status==='stopped').length; }
   function showPage(view){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const page=$(`page-${view}`);if(page)page.classList.add('active');document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active',a.dataset.view===view));const link=document.querySelector(`[data-view="${view}"]`);$('pageTitle').textContent=link?link.textContent.trim():view;$('sidebar').classList.remove('open');if(view==='map'&&mapB)setTimeout(()=>mapB.invalidateSize(),100);if(view==='overview'&&mapA)setTimeout(()=>mapA.invalidateSize(),100);}
-  async function api(path,options={}){if(!apiBase)throw new Error('أدخل عنوان API أولاً من الإعدادات.');const headers={'Content-Type':'application/json',...(options.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;const response=await fetch(`${apiBase.replace(/\/$/,'')}${path}`,{...options,headers});if(response.status===204)return null;const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);return data;}
+  async function refreshAccessToken(){
+    if(!refreshToken)throw new Error('لا يوجد رمز تحديث للجلسة.');
+    if(!refreshPromise){
+      refreshPromise=(async()=>{
+        const response=await fetch(`${apiBase.replace(/\/$/,'')}/auth/refresh`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({refreshToken})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok||!data.accessToken||!data.refreshToken)throw new Error(data.message||'تعذر تجديد جلسة الدخول.');
+        token=data.accessToken;
+        refreshToken=data.refreshToken;
+        sessionStorage.setItem('darb_access',token);
+        sessionStorage.setItem('darb_refresh',refreshToken);
+        return token;
+      })().finally(()=>{refreshPromise=null;});
+    }
+    return refreshPromise;
+  }
+  async function api(path,options={}){
+    if(!apiBase)throw new Error('أدخل عنوان API أولاً من الإعدادات.');
+    const url=`${apiBase.replace(/\/$/,'')}${path}`;
+    const request=()=>{
+      const headers={'Content-Type':'application/json',...(options.headers||{})};
+      if(token)headers.Authorization=`Bearer ${token}`;
+      return fetch(url,{...options,headers});
+    };
+    let response=await request();
+    if(response.status===401&&refreshToken&&!path.startsWith('/auth/')){
+      try{
+        await refreshAccessToken();
+        response=await request();
+      }catch(error){
+        await logout();
+        throw new Error('انتهت جلسة الدخول. سجّل الدخول مجدداً للمتابعة.');
+      }
+    }
+    if(response.status===204)return null;
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);
+    return data;
+  }
   async function loadVehicles(){if(!token||!orgId)return;const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);const list=Array.isArray(data)?data:(data.items||data.vehicles||[]);const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));vehicles=await Promise.all(base.map(async v=>{try{const loc=await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`);if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))return v;const age=Math.max(0,Date.now()-new Date(loc.recorded_at||loc.recordedAt).getTime());const mins=Math.floor(age/60000);const speed=Number(loc.speed_kmh??loc.speedKmh??0);return {...v,lat:Number(loc.latitude),lng:Number(loc.longitude),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};}catch{return v;}}));renderVehicles();updateStats();drawMarkers();}
   function openModal(id){$(id).classList.add('open');$(id).setAttribute('aria-hidden','false');}function closeModal(id){$(id).classList.remove('open');$(id).setAttribute('aria-hidden','true');}
   async function login(e){e.preventDefault();$('loginMessage').textContent='جارٍ تسجيل الدخول…';try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({identifier:$('identifier').value.trim(),password:$('password').value})});token=data.accessToken;refreshToken=data.refreshToken;sessionStorage.setItem('darb_access',token);sessionStorage.setItem('darb_refresh',refreshToken);setConnection(true);closeModal('loginModal');if (!orgId) { vehicles=[];renderVehicles();updateStats();drawMarkers();$('settingsMessage').textContent='أنشئ مؤسسة من صفحة الإعدادات لبدء إضافة المركبات.'; } if (orgId) {
@@ -119,8 +161,15 @@ function connectDarbRealtime() {
     drawMarkers();
   });
 
-  darbSocket.on('disconnect', () => {
-    console.log('DARB: Live tracking disconnected');
+  darbSocket.on('disconnect', reason => {
+    console.log('DARB: Live tracking disconnected', reason);
+    if(reason==='io server disconnect'&&refreshToken&&!socketRefreshInProgress){
+      socketRefreshInProgress=true;
+      refreshAccessToken()
+        .then(()=>connectDarbRealtime())
+        .catch(error=>console.warn('DARB: realtime session refresh failed',error.message))
+        .finally(()=>{socketRefreshInProgress=false;});
+    }
   });
 
   darbSocket.on('connect_error', error => {

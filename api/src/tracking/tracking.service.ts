@@ -78,7 +78,7 @@ export class TrackingService {
   }
 
   async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto) {
-    if (!authorization || !/^Bearer\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
+    if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     const secret = authorization.replace(/^Bearer\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');
     const recorded = Date.parse(dto.recordedAt);

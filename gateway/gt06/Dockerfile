@@ -9,7 +9,7 @@ FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /src/api/dist ./api/dist
-COPY gateway/gt06 ./gateway/gt06
+COPY gateway/gt06/server.js ./gateway/gt06/server.js
 EXPOSE 5023/tcp 5024/tcp
 USER node
 CMD ["node", "gateway/gt06/server.js"]

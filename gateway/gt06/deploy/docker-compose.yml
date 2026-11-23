@@ -1,0 +1,29 @@
+services:
+  darb-gps-tcp-gateway:
+    build:
+      context: ../../..
+      dockerfile: gateway/gt06/Dockerfile
+    image: darb-gps-tcp-gateway:local
+    container_name: darb-gps-tcp-gateway
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    ports:
+      - "5023:5023/tcp"
+      - "5024:5024/tcp"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

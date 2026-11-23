@@ -37,3 +37,11 @@ jobs:
 
       - name: Test GT06 TCP gateway source filtering
         run: node --test gateway/gt06/test/server.test.cjs
+
+      - name: Validate TCP gateway Compose deployment
+        run: |
+          cp gateway/gt06/deploy/.env.example gateway/gt06/deploy/.env
+          docker compose -f gateway/gt06/deploy/docker-compose.yml config --quiet
+
+      - name: Build TCP gateway container image
+        run: docker build -f gateway/gt06/Dockerfile -t darb-gps-tcp-gateway:ci .

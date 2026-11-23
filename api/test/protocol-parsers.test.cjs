@@ -59,3 +59,10 @@ test('GT06 rejects malformed frames and unsupported packet types', () => {
   assert.throws(() => parseGt06Frame(Buffer.from([0x78,0x78,0x05,0x01])));
   assert.throws(() => parseGt06Frame(Buffer.from([0x79,0x79,0x00,0x05,0x01,0,1,0,0,0x0d,0x0a])));
 });
+
+test('NMEA rejects unsupported talker IDs and malformed GGA quality fields', () => {
+  assert.throws(() => parseNmeaSentence(nmea('XXXYZ,123519,A,4807.038,N,01131.000,E,0.0,0.0,230394,,,A')), /talker|sentence type/);
+  assert.throws(() => parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,NaN,08,0.9,545.4,M,46.9,M,,') ), /quality data/);
+  assert.throws(() => parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,,M,46.9,M,,') ), /quality data/);
+  assert.throws(() => parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,9,08,0.9,545.4,M,46.9,M,,') ), /quality data/);
+});

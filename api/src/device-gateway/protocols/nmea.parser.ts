@@ -51,7 +51,8 @@ export function parseNmeaSentence(line: string): NmeaFix {
   for (let i = 0; i < match[1].length; i++) checksum ^= match[1].charCodeAt(i);
   if (checksum !== Number.parseInt(match[2], 16)) throw new Error('NMEA checksum mismatch');
   const fields = match[1].split(',');
-  const type = fields[0].slice(-3);
+  if (!/^[A-Z]{2}(RMC|GGA)$/i.test(fields[0])) throw new Error('Unsupported NMEA talker or sentence type');
+  const type = fields[0].slice(-3).toUpperCase();
   if (type === 'RMC') {
     if (fields.length < 10 || fields[2] !== 'A') throw new Error('NMEA RMC has no valid fix');
     const time = parseUtcTime(fields[1]);
@@ -71,17 +72,21 @@ export function parseNmeaSentence(line: string): NmeaFix {
     };
   }
   if (type === 'GGA') {
-    if (fields.length < 10 || Number(fields[6]) <= 0) throw new Error('NMEA GGA has no valid fix');
+    if (fields.length < 10) throw new Error('NMEA GGA has no valid fix');
     parseUtcTime(fields[1]);
+    const fixQuality = Number(fields[6]);
     const satellites = Number(fields[7]);
-    const altitude = Number(fields[9]);
-    if (!Number.isInteger(satellites) || satellites < 0 || !Number.isFinite(altitude)) throw new Error('Invalid NMEA GGA quality data');
+    const altitude = fields[9] === '' ? Number.NaN : Number(fields[9]);
+    if (!Number.isInteger(fixQuality) || fixQuality < 1 || fixQuality > 8 ||
+        !Number.isInteger(satellites) || satellites < 0 || satellites > 99 || !Number.isFinite(altitude)) {
+      throw new Error('Invalid NMEA GGA quality data');
+    }
     return {
       sentence: 'GGA',
       latitude: parseCoordinate(fields[2], fields[3], 2, 90),
       longitude: parseCoordinate(fields[4], fields[5], 3, 180),
       satellites,
-      fixQuality: Number(fields[6]),
+      fixQuality,
       altitudeMeters: altitude,
     };
   }

@@ -60,3 +60,12 @@ The session helper is therefore not a complete public authentication boundary.
 Before exposing a raw TCP listener, deploy it behind a trusted APN/VPN or
 device-source network controls, or add a verified model-specific device
 authentication mechanism. Do not treat IMEI-only login as strong authentication.
+
+
+## NMEA input validation hardening
+
+The NMEA parser accepts the standard two-character talker prefix followed by
+RMC or GGA, validates GGA fix quality (1–8), satellite count (0–99), and a
+present finite altitude. The stream decoder rejects non-ASCII bytes before
+converting buffers to text. This prevents malformed numeric fields such as
+`NaN` or empty altitude values from being normalized into location records.

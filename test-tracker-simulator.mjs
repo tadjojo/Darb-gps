@@ -4,6 +4,8 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 
 const simulator = path.join(path.dirname(fileURLToPath(import.meta.url)), 'simulate-tracker.mjs');
 const requests = [];
@@ -27,10 +29,13 @@ function run(protocol, extra = []) {
     child.once('close', code => resolve({ code, stdout, stderr }));
   });
 }
+const fixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'darb-sim-test-'));
+const gt06Fixture = path.join(fixtureDir, 'gt06-frame.hex');
+await fs.writeFile(gt06Fixture, '00'.repeat(20));
 try {
   const json = await run('json');
   const nmea = await run('nmea0183');
-  const gt06 = await run('gt06', ['--payload-file', path.join(path.dirname(simulator), 'test-fixtures', 'gt06-location-frame.hex')]);
+  const gt06 = await run('gt06', ['--payload-file', gt06Fixture]);
   for (const [name, result] of [['json', json], ['nmea', nmea], ['gt06', gt06]]) {
     if (result.code !== 0) throw new Error(`${name} simulator failed: ${result.stdout} ${result.stderr}`);
   }
@@ -53,4 +58,5 @@ try {
   console.log('PASS simulator API contracts: JSON, NMEA 0183, GT06');
 } finally {
   await new Promise(resolve => server.close(resolve));
+  await fs.rm(fixtureDir, { recursive: true, force: true });
 }

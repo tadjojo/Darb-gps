@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.constants';
@@ -97,14 +97,22 @@ export class TrackingService {
     }
     const secret = randomBytes(32).toString('base64url');
     const credentialHash = createHash('sha256').update(secret).digest('hex');
-    const created = await this.pool.query(
-      `INSERT INTO private.darb_tracking_devices
-         (vehicle_id, created_by, label, credential_hash, protocol, imei, model, timezone_offset_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, vehicle_id, label, status, created_at, protocol, imei, model, timezone_offset_minutes`,
-      [vehicleId, user.sub, profile.label?.trim() || null, credentialHash, protocol,
-       profile.imei ?? null, profile.model?.trim() || null, profile.timezoneOffsetMinutes ?? null],
-    );
+    let created;
+    try {
+      created = await this.pool.query(
+        `INSERT INTO private.darb_tracking_devices
+           (vehicle_id, created_by, label, credential_hash, protocol, imei, model, timezone_offset_minutes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, vehicle_id, label, status, created_at, protocol, imei, model, timezone_offset_minutes`,
+        [vehicleId, user.sub, profile.label?.trim() || null, credentialHash, protocol,
+         profile.imei ?? null, profile.model?.trim() || null, profile.timezoneOffsetMinutes ?? null],
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505' && profile.imei) {
+        throw new ConflictException('This GPS device IMEI is already registered');
+      }
+      throw error;
+    }
     return { device: created.rows[0], credential: secret, credentialFormat: 'Authorization: Bearer <credential>', warning: 'Store this credential securely; it is shown only once.' };
   }
 

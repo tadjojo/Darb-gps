@@ -244,3 +244,50 @@ test('TCP gateway graceful shutdown closes active tracker sockets after the drai
   await shutdown;
   assert.equal(server.listening, false);
 });
+
+test('GT06 TCP gateway closes connections that do not complete login before the absolute deadline', async () => {
+  const calls = [];
+  const server = createGateway({
+    apiBase: 'https://darb-api.example/api/v1',
+    devices: new Map([['353419032332707', {
+      imei: '353419032332707',
+      bearerToken: 'test-device-bearer-token-0123456789',
+      sourceRanges: [parseCidr('127.0.0.1/32')],
+    }]]),
+    trustedRanges: [parseCidr('127.0.0.1/32')],
+    maxConnections: 10,
+    loginTimeoutMs: 60,
+    idleTimeoutMs: 30000,
+  }, async () => {
+    calls.push(true);
+    return { ok: true, status: 200, text: async () => '' };
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const socket = net.createConnection(server.address().port, '127.0.0.1');
+  try {
+    await once(socket, 'connect');
+    const closed = once(socket, 'close');
+    socket.write(Buffer.from([0x78]));
+    await closed;
+    assert.equal(calls.length, 0);
+  } finally {
+    socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('loadConfig rejects GT06 login timeouts outside the supported range', () => {
+  withGatewayEnv({
+    DARB_API_BASE_URL: 'https://darb-api.example/api/v1',
+    TRUSTED_DEVICE_CIDRS: '10.20.0.0/16',
+    GT06_DEVICE_MAP_JSON: JSON.stringify({
+      '353419032332707': {
+        bearerToken: 'gt06-test-bearer-token-0123456789',
+        sourceCidrs: ['10.20.1.2/32'],
+      },
+    }),
+    NMEA_DEVICE_MAP_JSON: '{}',
+    LOGIN_TIMEOUT_MS: '999',
+  }, () => assert.throws(loadConfig, /LOGIN_TIMEOUT_MS/));
+});

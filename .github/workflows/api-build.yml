@@ -1,4 +1,3 @@
-
 name: DARB GPS API Build
 
 on:
@@ -30,6 +29,6 @@ jobs:
         working-directory: api
         run: npm install
 
-      - name: Build API
+      - name: Build API and run GPS protocol parser tests
         working-directory: api
-        run: npm run build
+        run: npm run test:protocols

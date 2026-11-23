@@ -1,9 +1,10 @@
 # DARB GPS GT06 TCP Gateway
 
-This is a standalone raw-TCP adapter for GT06/Concox trackers. It reassembles
-0x7878/0x7979 frames, authenticates the login IMEI against an explicitly
-enrolled-device allowlist, acknowledges heartbeat frames, and forwards location
-frames to the existing authenticated DARB HTTPS ingestion endpoint.
+This is a standalone raw-TCP adapter for GT06/Concox trackers and NMEA 0183
+feeds. It reassembles 0x7878/0x7979 GT06 frames, authenticates GT06 login IMEI
+against an enrolled-device allowlist, and forwards heartbeat/location packets
+to DARB over HTTPS. Its optional NMEA listener maps a trusted static source IP
+to an enrolled NMEA device and forwards checksum-validated RMC/GGA sentences.
 
 ## Important network security requirement
 
@@ -35,6 +36,8 @@ manager. Never commit the device bearer credentials to Git.
 
 - `DARB_API_BASE_URL`: `https://darb-gps-x.onrender.com/api/v1`
 - `GT06_PORT`: optional, defaults to `5023`
+- `NMEA_PORT`: optional, defaults to `5024`; listener starts only when NMEA device mappings are configured
+- `NMEA_DEVICE_MAP_JSON`: optional JSON object keyed by each NMEA device's static source IPv4 address. Each entry contains its one-time DARB bearer credential.
 - `TRUSTED_DEVICE_CIDRS`: comma-separated trusted IPv4 CIDR ranges from the
   private APN/VPN. Required.
 - `GT06_DEVICE_MAP_JSON`: JSON object keyed by 15-digit IMEI. Each entry
@@ -55,6 +58,19 @@ Optional capacity settings:
 - `MAX_CONNECTIONS`: defaults to 500, allowed 1–5000
 - `IDLE_TIMEOUT_MS`: defaults to 120000, allowed 10000–3600000
 
+### NMEA device map example
+
+```json
+{
+  "10.20.30.41": {
+    "bearerToken": "PASTE_THE_ONE_TIME_NMEA_DEVICE_CREDENTIAL_HERE"
+  }
+}
+```
+
+NMEA 0183 sentences do not carry an IMEI login. The source IP must therefore be
+static and uniquely mapped to one enrolled NMEA device inside the trusted APN/VPN.
+
 ## Data flow
 
 1. A device opens a TCP connection from a trusted APN/VPN source address.
@@ -65,7 +81,7 @@ Optional capacity settings:
 4. Location packets are forwarded as original frame hex to
    `POST /device-gateway/ingest/gt06`; the API validates the enrolled device
    bearer credential, protocol, CRC, timestamp, and configured device timezone.
-5. A location ACK is sent only after the API accepts the fix.
+5. A GT06 location ACK is sent only after the API accepts the fix. NMEA has no corresponding ACK; RMC is forwarded with its UTC timestamp, and GGA is forwarded only when its UTC time-of-day matches the latest RMC from that same connection.
 
 The bearer token is held only by the gateway and is never sent to the tracker.
 Unknown IMEIs, untrusted source addresses, packets before login, API failures,

@@ -11,6 +11,8 @@ const {
 const {
   handleGt06SessionFrame,
 } = require('../../api/dist/device-gateway/protocols/gt06-session');
+const { NmeaStreamDecoder } = require('../../api/dist/device-gateway/protocols/nmea-stream-decoder');
+const { parseNmeaSentence } = require('../../api/dist/device-gateway/protocols/nmea.parser');
 
 function ipv4ToNumber(value) {
   const normalized = value.startsWith('::ffff:') ? value.slice(7) : value;
@@ -55,10 +57,24 @@ function loadConfig() {
   const trustedText = (process.env.TRUSTED_DEVICE_CIDRS || '').split(',').map(x => x.trim()).filter(Boolean);
   if (trustedText.length === 0) throw new Error('TRUSTED_DEVICE_CIDRS is required; do not expose IMEI-only login to the public internet');
   const trustedRanges = trustedText.map(parseCidr);
+  const rawNmeaDevices = JSON.parse(process.env.NMEA_DEVICE_MAP_JSON || '{}');
+  if (!rawNmeaDevices || typeof rawNmeaDevices !== 'object' || Array.isArray(rawNmeaDevices)) {
+    throw new Error('NMEA_DEVICE_MAP_JSON must be a JSON object keyed by static source IPv4 address');
+  }
+  const nmeaDevices = new Map();
+  for (const [sourceIp, value] of Object.entries(rawNmeaDevices)) {
+    if (ipv4ToNumber(sourceIp) === null || !value || typeof value !== 'object' ||
+        typeof value.bearerToken !== 'string' || value.bearerToken.length < 32) {
+      throw new Error('Each NMEA device entry requires a static IPv4 source address and bearerToken of at least 32 characters');
+    }
+    nmeaDevices.set(sourceIp, { sourceIp, bearerToken: value.bearerToken });
+  }
   const port = Number(process.env.GT06_PORT || 5023);
+  const nmeaPort = Number(process.env.NMEA_PORT || 5024);
   const maxConnections = Number(process.env.MAX_CONNECTIONS || 500);
   const idleTimeoutMs = Number(process.env.IDLE_TIMEOUT_MS || 120000);
   if (!Number.isInteger(port) || port < 1 || port > 65535 ||
+      !Number.isInteger(nmeaPort) || nmeaPort < 1 || nmeaPort > 65535 || nmeaPort === port ||
       !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 5000 ||
       !Number.isInteger(idleTimeoutMs) || idleTimeoutMs < 10000 || idleTimeoutMs > 3600000) {
     throw new Error('Invalid GT06_PORT, MAX_CONNECTIONS, or IDLE_TIMEOUT_MS setting');
@@ -68,6 +84,8 @@ function loadConfig() {
     devices,
     trustedRanges,
     port,
+    nmeaPort,
+    nmeaDevices,
     maxConnections,
     idleTimeoutMs,
   };
@@ -167,6 +185,85 @@ function createGateway(config, fetchImpl = fetch) {
   return server;
 }
 
+
+function createNmeaGateway(config, fetchImpl = fetch) {
+  let connections = 0;
+
+  async function postToApi(device, line, pairedUtcTimestamp) {
+    const body = { sentence: line };
+    if (pairedUtcTimestamp) body.pairedUtcTimestamp = pairedUtcTimestamp;
+    const response = await fetchImpl(config.apiBase + '/device-gateway/ingest/nmea', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer ' + device.bearerToken,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      throw new Error('DARB API rejected NMEA sentence (' + response.status + '): ' + detail);
+    }
+  }
+
+  const server = net.createServer(socket => {
+    const sourceIp = (socket.remoteAddress || '').startsWith('::ffff:')
+      ? socket.remoteAddress.slice(7) : socket.remoteAddress;
+    const device = config.nmeaDevices.get(sourceIp);
+    if (connections >= config.maxConnections || !device ||
+        !isTrustedAddress(socket.remoteAddress, config.trustedRanges)) {
+      socket.destroy();
+      return;
+    }
+    connections++;
+    socket.setTimeout(config.idleTimeoutMs);
+    const decoder = new NmeaStreamDecoder(256);
+    let lastRmcTimestamp = null;
+    let pendingLines = 0;
+    let queue = Promise.resolve();
+    const close = () => { if (!socket.destroyed) socket.destroy(); };
+    socket.once('close', () => { connections = Math.max(0, connections - 1); });
+    socket.on('timeout', close);
+    socket.on('error', close);
+
+    socket.on('data', chunk => {
+      let lines;
+      try { lines = decoder.push(chunk); } catch { close(); return; }
+      if (!lines.length) return;
+      pendingLines += lines.length;
+      if (pendingLines > 100) { close(); return; }
+      socket.pause();
+      queue = queue.then(async () => {
+        for (const line of lines) {
+          if (socket.destroyed) break;
+          try {
+            const type = line.split('*')[0].split(',')[0].slice(-3).toUpperCase();
+            if (type !== 'RMC' && type !== 'GGA') continue;
+            const fix = parseNmeaSentence(line);
+            if (fix.sentence === 'RMC') {
+              lastRmcTimestamp = fix.recordedAt;
+              await postToApi(device, line);
+            } else if (lastRmcTimestamp) {
+              const rmcClock = new Date(lastRmcTimestamp).toISOString().slice(11, 19).replace(/:/g, '');
+              const ggaClock = line.split('*')[0].split(',')[1].slice(0, 6);
+              if (rmcClock === ggaClock) await postToApi(device, line, lastRmcTimestamp);
+            }
+          } catch (error) {
+            process.stderr.write('[nmea-gateway] session closed: ' + (error instanceof Error ? error.message : 'sentence error') + '\n');
+            close();
+            break;
+          }
+        }
+      }).finally(() => {
+        pendingLines = Math.max(0, pendingLines - lines.length);
+        if (!socket.destroyed) socket.resume();
+      });
+    });
+  });
+  return server;
+}
+
 if (require.main === module) {
   let config;
   try {
@@ -179,9 +276,18 @@ if (require.main === module) {
   server.listen(config.port, '0.0.0.0', () => {
     process.stdout.write('[gt06-gateway] listening on TCP port ' + config.port + '; enrolled devices: ' + config.devices.size + '\n');
   });
-  const shutdown = () => server.close(() => process.exit(0));
+  const servers = [server];
+  if (config.nmeaDevices.size > 0) {
+    const nmeaServer = createNmeaGateway(config);
+    servers.push(nmeaServer);
+    nmeaServer.listen(config.nmeaPort, '0.0.0.0', () => {
+      process.stdout.write('[nmea-gateway] listening on TCP port ' + config.nmeaPort + '; mapped source IPs: ' + config.nmeaDevices.size + '\n');
+    });
+  }
+  const shutdown = () => Promise.all(servers.map(item => new Promise(resolve => item.close(resolve))))
+    .then(() => process.exit(0));
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
 }
 
-module.exports = { createGateway, isTrustedAddress, parseCidr, loadConfig };
+module.exports = { createGateway, createNmeaGateway, isTrustedAddress, parseCidr, loadConfig };

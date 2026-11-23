@@ -122,6 +122,24 @@ export class TrackingService {
     return result.rows[0] as { protocol: 'json' | 'gt06' | 'nmea'; timezone_offset_minutes: number | null; model: string | null };
   }
 
+  async recordGpsTrackerHeartbeat(authorization: string | undefined, protocol: 'gt06' | 'nmea') {
+    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) {
+      throw new UnauthorizedException('GPS tracker credential required');
+    }
+    const secret = authorization.replace(/^Bearer\\s+/i, '').trim();
+    const hash = createHash('sha256').update(secret).digest('hex');
+    const result = await this.pool.query(
+      `UPDATE private.darb_tracking_devices
+          SET last_seen_at = now(), last_protocol = $2
+        WHERE credential_hash = $1 AND status = 'active' AND protocol = $2
+        RETURNING id`,
+      [hash, protocol],
+    );
+    if (!result.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid, revoked, or has a different protocol');
+    await this.alerts.markDeviceOnline(result.rows[0].id);
+    return { accepted: true, protocol, receivedAt: new Date().toISOString() };
+  }
+
   async revokeGpsTracker(user: AuthenticatedUser, deviceId: string) {
     const result = await this.pool.query(
       `UPDATE private.darb_tracking_devices d SET status = 'revoked'

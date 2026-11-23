@@ -60,3 +60,16 @@ test('GT06 extended login frame receives an extended-format acknowledgement', ()
   assert.equal(result.ack[1], 0x79);
   assert.equal(result.ack.readUInt16BE(2), 5);
 });
+
+test('GT06 extended heartbeat keeps extended framing in its ACK', () => {
+  const { crc16Itt } = require('../dist/device-gateway/protocols/gt06.parser');
+  const body = Buffer.from([0x00, 0x08, 0x13, 0x46, 0x06, 0x04, 0x00, 0x2a]);
+  const crc = crc16Itt(body);
+  const raw = Buffer.concat([Buffer.from([0x79, 0x79]), body, Buffer.from([crc >> 8, crc & 255, 0x0d, 0x0a])]);
+  const frame = parseGt06Frame(raw);
+  const result = handleGt06SessionFrame(frame, '353419032332707', true);
+  assert.equal(result.authenticated, true);
+  assert.equal(result.ack[0], 0x79);
+  assert.equal(result.ack[1], 0x79);
+  assert.equal(result.ack.readUInt16BE(2), 5);
+});

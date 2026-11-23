@@ -35,6 +35,8 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Generate Android runner
+        run: flutter create --platforms=android --org com.darb --project-name darb_gps .
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze Dart code

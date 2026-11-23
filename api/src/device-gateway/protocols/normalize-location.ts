@@ -8,8 +8,8 @@ import { NmeaFix } from './nmea.parser';
  * for the recorded date from an explicit device/region profile.
  */
 export function normalizeGt06Location(location: Gt06Location, timezoneOffsetMinutes: number): TrackerLocationDto {
-  if (!Number.isInteger(timezoneOffsetMinutes) || timezoneOffsetMinutes < -720 || timezoneOffsetMinutes > 840) {
-    throw new Error('GT06 timezone offset must be an integer between -720 and 840 minutes');
+  if (!Number.isInteger(timezoneOffsetMinutes) || timezoneOffsetMinutes < -840 || timezoneOffsetMinutes > 840) {
+    throw new Error('GT06 timezone offset must be an integer between -840 and 840 minutes');
   }
   if (!location.gpsFixed) throw new Error('GT06 location does not contain a valid GPS fix');
   if (!Number.isFinite(location.latitude) || location.latitude < -90 || location.latitude > 90 ||

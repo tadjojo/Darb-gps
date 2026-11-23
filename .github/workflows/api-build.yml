@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "api/**"
+      - "gateway/gt06/**"
       - ".github/workflows/api-build.yml"
   pull_request:
     branches: [main]
@@ -32,3 +33,6 @@ jobs:
       - name: Build API and run GPS protocol parser tests
         working-directory: api
         run: npm run test:protocols
+
+      - name: Test GT06 TCP gateway source filtering
+        run: node --test gateway/gt06/test/server.test.cjs

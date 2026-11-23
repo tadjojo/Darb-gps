@@ -39,7 +39,9 @@ manager. Never commit the device bearer credentials to Git.
 - `NMEA_PORT`: optional, defaults to `5024`; listener starts only when NMEA device mappings are configured
 - `NMEA_DEVICE_MAP_JSON`: optional JSON object keyed by each NMEA device's static source IPv4 address. Each entry contains its one-time DARB bearer credential.
 - `TRUSTED_DEVICE_CIDRS`: comma-separated trusted IPv4 CIDR ranges from the
-  private APN/VPN. Required.
+  private APN/VPN. Required. Each GT06 device entry must also define its own
+  non-empty `sourceCidrs` list; a shared APN range alone does not bind an IMEI
+to a particular SIM/device.
 - `GT06_DEVICE_MAP_JSON`: JSON object keyed by 15-digit IMEI. Each entry
   contains the one-time bearer credential copied from the DARB device
   enrollment screen.
@@ -49,7 +51,8 @@ Example shape (replace placeholders in the host's secret manager):
 ```json
 {
   "123456789012345": {
-    "bearerToken": "PASTE_THE_ONE_TIME_DEVICE_CREDENTIAL_HERE"
+    "bearerToken": "PASTE_THE_ONE_TIME_DEVICE_CREDENTIAL_HERE",
+    "sourceCidrs": ["10.20.30.41/32"]
   }
 }
 ```

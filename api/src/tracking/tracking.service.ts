@@ -130,6 +130,7 @@ export class TrackingService {
       );
       if (!device.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid or revoked');
       const row = device.rows[0];
+      await client.query(`UPDATE private.darb_tracking_devices SET last_seen_at = now(), last_protocol = 'json' WHERE id = $1`, [row.id]);
       const inserted = await client.query(
         `INSERT INTO public.vehicle_locations
           (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)
@@ -141,16 +142,13 @@ export class TrackingService {
       );
       if (!inserted.rowCount) {
         await client.query('COMMIT');
+        await this.alerts.markDeviceOnline(row.id).catch((error) => console.error('GPS tracker recovery alert update failed', error));
+        if (dto.tamper) await this.alerts.createTamperAlert(row.vehicle_id, row.id, dto.recordedAt, dto.eventId).catch((error) => console.error('GPS tamper alert creation failed', error));
         return { accepted: true, duplicate: true, eventId: dto.eventId };
       }
-      await client.query(
-        `UPDATE private.darb_tracking_devices
-            SET last_seen_at = now(), last_protocol = 'json'
-          WHERE id = $1`,
-        [row.id],
-      );
       await client.query('COMMIT');
       await this.alerts.markDeviceOnline(row.id).catch((error) => console.error('GPS tracker recovery alert update failed', error));
+      if (dto.tamper) await this.alerts.createTamperAlert(row.vehicle_id, row.id, dto.recordedAt, dto.eventId).catch((error) => console.error('GPS tamper alert creation failed', error));
       await this.alerts.evaluateLocation(inserted.rows[0]).catch((error) => console.error('GPS tracker alert evaluation failed', error));
       await this.publishIfLatest(inserted.rows[0]);
       return { accepted: true, duplicate: false, location: inserted.rows[0] };

@@ -24,9 +24,11 @@ export class DeviceGatewayController {
   ) {
     if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     try {
+      const profile = await this.tracking.getGpsTrackerProfile(authorization);
+      if (profile.protocol !== 'nmea') throw new BadRequestException('Tracker is not enrolled for NMEA');
       const fix = parseNmeaSentence(dto.sentence);
       const normalized = normalizeNmeaFix(fix, dto.pairedUtcTimestamp);
-      return this.tracking.ingestGpsTracker(authorization, normalized);
+      return this.tracking.ingestGpsTracker(authorization, normalized, 'nmea');
     } catch (error) {
       if (error instanceof BadRequestException) throw error;
       throw new BadRequestException(error instanceof Error ? error.message : 'Invalid NMEA sentence');

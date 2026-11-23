@@ -9,6 +9,9 @@ export class NmeaStreamDecoder {
   }
 
   push(chunk: string | Buffer): string[] {
+    if (Buffer.isBuffer(chunk) && [...chunk].some(byte => byte !== 0x0a && byte !== 0x0d && (byte < 0x20 || byte > 0x7e))) {
+      throw new Error('NMEA stream contains non-ASCII bytes');
+    }
     const text = typeof chunk === 'string' ? chunk : chunk.toString('ascii');
     if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text)) {
       throw new Error('NMEA stream contains non-printable control characters');

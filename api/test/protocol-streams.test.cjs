@@ -70,3 +70,8 @@ test('GT06 extended 0x7979 frames parse and reassemble across chunks', () => {
   assert.equal(parseGt06Frame(out[0]).extended, true);
   assert.equal(parseGt06Frame(out[1]).extended, false);
 });
+
+test('NMEA byte stream rejects non-ASCII transport bytes', () => {
+  const decoder = new NmeaStreamDecoder();
+  assert.throws(() => decoder.push(Buffer.from([0x24, 0xff, 0x0a])), /non-ASCII/);
+});

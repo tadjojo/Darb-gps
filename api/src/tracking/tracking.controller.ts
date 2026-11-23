@@ -12,8 +12,8 @@ export class TrackingController {
   constructor(private readonly tracking: TrackingService) {}
 
   @Post('devices/enroll-mobile')
-  enrollMobile(@CurrentUser() user: AuthenticatedUser, @Body() body: { vehicleId: string }) {
-    return this.tracking.enrollMobileDevice(user, body.vehicleId);
+  enrollMobile(@CurrentUser() user: AuthenticatedUser, @Body() dto: EnrollGpsTrackerDto) {
+    return this.tracking.enrollMobileDevice(user, dto.vehicleId);
   }
 
   @Get('devices/vehicle/:vehicleId')

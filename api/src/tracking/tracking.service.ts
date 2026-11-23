@@ -69,7 +69,8 @@ export class TrackingService {
       `SELECT id, vehicle_id, 'mobile'::text AS device_type, status, enrolled_at AS created_at, last_seen_at
          FROM private.darb_mobile_devices WHERE vehicle_id = $1
        UNION ALL
-       SELECT id, vehicle_id, 'gps_tracker'::text AS device_type, status, created_at, last_seen_at
+       SELECT id, vehicle_id, 'gps_tracker'::text AS device_type, status, created_at, last_seen_at,
+              label, protocol, imei, model, timezone_offset_minutes
          FROM private.darb_tracking_devices WHERE vehicle_id = $1
        ORDER BY created_at DESC`,
       [vehicleId],
@@ -77,7 +78,9 @@ export class TrackingService {
     return result.rows;
   }
 
-  async enrollGpsTracker(user: AuthenticatedUser, vehicleId: string, label?: string) {
+  async enrollGpsTracker(user: AuthenticatedUser, vehicleId: string, profile: {
+    label?: string; protocol?: 'json' | 'gt06' | 'nmea'; imei?: string; model?: string; timezoneOffsetMinutes?: number;
+  } = {}) {
     const access = await this.pool.query(
       `SELECT 1 FROM vehicles v JOIN vehicle_members vm ON vm.vehicle_id = v.id
         WHERE v.id = $1 AND v.status = 'active' AND vm.user_id = $2
@@ -85,15 +88,38 @@ export class TrackingService {
       [vehicleId, user.sub],
     );
     if (!access.rowCount) throw new NotFoundException('Vehicle not found or permission denied');
+    const protocol = profile.protocol ?? 'json';
+    if (protocol === 'gt06' && (!profile.imei || profile.timezoneOffsetMinutes === undefined)) {
+      throw new BadRequestException('GT06 devices require an IMEI and an explicit timezoneOffsetMinutes');
+    }
+    if (protocol === 'nmea' && !profile.imei) {
+      throw new BadRequestException('NMEA hardware devices require an assigned IMEI or unique device identifier');
+    }
     const secret = randomBytes(32).toString('base64url');
     const credentialHash = createHash('sha256').update(secret).digest('hex');
     const created = await this.pool.query(
-      `INSERT INTO private.darb_tracking_devices (vehicle_id, created_by, label, credential_hash)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, vehicle_id, label, status, created_at`,
-      [vehicleId, user.sub, label?.trim() || null, credentialHash],
+      `INSERT INTO private.darb_tracking_devices
+         (vehicle_id, created_by, label, credential_hash, protocol, imei, model, timezone_offset_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, vehicle_id, label, status, created_at, protocol, imei, model, timezone_offset_minutes`,
+      [vehicleId, user.sub, profile.label?.trim() || null, credentialHash, protocol,
+       profile.imei ?? null, profile.model?.trim() || null, profile.timezoneOffsetMinutes ?? null],
     );
     return { device: created.rows[0], credential: secret, credentialFormat: 'Authorization: Bearer <credential>', warning: 'Store this credential securely; it is shown only once.' };
+  }
+
+  async getGpsTrackerProfile(authorization: string | undefined) {
+    if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
+    const secret = authorization.replace(/^Bearer\s+/i, '').trim();
+    const hash = createHash('sha256').update(secret).digest('hex');
+    const result = await this.pool.query(
+      `SELECT protocol, timezone_offset_minutes, model
+         FROM private.darb_tracking_devices
+        WHERE credential_hash = $1 AND status = 'active'`,
+      [hash],
+    );
+    if (!result.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid or revoked');
+    return result.rows[0] as { protocol: 'json' | 'gt06' | 'nmea'; timezone_offset_minutes: number | null; model: string | null };
   }
 
   async revokeGpsTracker(user: AuthenticatedUser, deviceId: string) {
@@ -110,7 +136,7 @@ export class TrackingService {
     return { revoked: true, deviceId };
   }
 
-  async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto) {
+  async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto, protocol: 'json' | 'gt06' | 'nmea' = 'json') {
     if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     const secret = authorization.replace(/^Bearer\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');
@@ -123,14 +149,15 @@ export class TrackingService {
     try {
       await client.query('BEGIN');
       const device = await client.query(
-        `SELECT id, vehicle_id FROM private.darb_tracking_devices
+        `SELECT id, vehicle_id, protocol FROM private.darb_tracking_devices
           WHERE credential_hash = $1 AND status = 'active'
           FOR SHARE`,
         [hash],
       );
       if (!device.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid or revoked');
       const row = device.rows[0];
-      await client.query(`UPDATE private.darb_tracking_devices SET last_seen_at = now(), last_protocol = 'json' WHERE id = $1`, [row.id]);
+      if (row.protocol !== protocol) throw new BadRequestException('Received protocol does not match the enrolled tracker profile');
+      await client.query(`UPDATE private.darb_tracking_devices SET last_seen_at = now(), last_protocol = $2 WHERE id = $1`, [row.id, protocol]);
       const inserted = await client.query(
         `INSERT INTO public.vehicle_locations
           (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)

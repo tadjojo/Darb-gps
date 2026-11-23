@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const net = require('node:net');
 const { once } = require('node:events');
-const { isTrustedAddress, isCidrContained, parseCidr, createGateway, createNmeaGateway } = require('../server');
+const { isTrustedAddress, isCidrContained, parseCidr, loadConfig, createGateway, createNmeaGateway } = require('../server');
 const { crc16Itt, buildGt06Ack } = require('../../../api/dist/device-gateway/protocols/gt06.parser');
 
 test('GT06 gateway validates IPv4 CIDR ranges', () => {

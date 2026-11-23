@@ -11,3 +11,7 @@ node_modules/
 api/dist/
 *.log
 .DS_Store
+
+# Keep only the committed deployment template; ignore the real gateway secrets.
+gateway/gt06/deploy/.env
+!gateway/gt06/deploy/.env.example

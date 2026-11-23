@@ -22,7 +22,7 @@ function parseCidr(value) {
   const [address, prefixText] = value.trim().split('/');
   const ip = ipv4ToNumber(address);
   const prefix = prefixText === undefined ? 32 : Number(prefixText);
-  if (ip === null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+  if (ip === null || !Number.isInteger(prefix) || prefix < 1 || prefix > 32) {
     throw new Error('TRUSTED_DEVICE_CIDRS must contain valid IPv4 CIDR ranges');
   }
   const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;

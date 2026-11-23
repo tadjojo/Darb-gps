@@ -59,6 +59,7 @@ Example shape (replace placeholders in the host's secret manager):
 
 Optional capacity settings:
 - `MAX_CONNECTIONS`: defaults to 500, allowed 1–5000
+- `LOGIN_TIMEOUT_MS`: defaults to 15000; a GT06 socket must complete its registered IMEI login within this absolute window (1000–120000 ms)
 - `IDLE_TIMEOUT_MS`: defaults to 120000, allowed 10000–3600000
 
 ### NMEA device map example

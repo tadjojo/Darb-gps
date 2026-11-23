@@ -94,12 +94,14 @@ function loadConfig() {
   const port = Number(process.env.GT06_PORT || 5023);
   const nmeaPort = Number(process.env.NMEA_PORT || 5024);
   const maxConnections = Number(process.env.MAX_CONNECTIONS || 500);
+  const loginTimeoutMs = Number(process.env.LOGIN_TIMEOUT_MS || 15000);
   const idleTimeoutMs = Number(process.env.IDLE_TIMEOUT_MS || 120000);
   if (!Number.isInteger(port) || port < 1 || port > 65535 ||
       !Number.isInteger(nmeaPort) || nmeaPort < 1 || nmeaPort > 65535 || nmeaPort === port ||
       !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 5000 ||
+      !Number.isInteger(loginTimeoutMs) || loginTimeoutMs < 1000 || loginTimeoutMs > 120000 ||
       !Number.isInteger(idleTimeoutMs) || idleTimeoutMs < 10000 || idleTimeoutMs > 3600000) {
-    throw new Error('Invalid GT06_PORT, MAX_CONNECTIONS, or IDLE_TIMEOUT_MS setting');
+    throw new Error('Invalid GT06_PORT, MAX_CONNECTIONS, LOGIN_TIMEOUT_MS, or IDLE_TIMEOUT_MS setting');
   }
   return {
     apiBase: apiBase.toString().replace(/\/$/, ''),
@@ -109,6 +111,7 @@ function loadConfig() {
     nmeaPort,
     nmeaDevices,
     maxConnections,
+    loginTimeoutMs,
     idleTimeoutMs,
   };
 }
@@ -143,11 +146,18 @@ function createGateway(config, fetchImpl = fetch) {
     let device = null;
     let pendingFrames = 0;
     let queue = Promise.resolve();
+    let loginTimer;
 
     const close = () => {
+      clearTimeout(loginTimer);
       if (!socket.destroyed) socket.destroy();
     };
-    socket.once('close', () => { connections = Math.max(0, connections - 1); });
+    loginTimer = setTimeout(close, config.loginTimeoutMs || 15000);
+    loginTimer.unref?.();
+    socket.once('close', () => {
+      clearTimeout(loginTimer);
+      connections = Math.max(0, connections - 1);
+    });
     socket.on('timeout', close);
     socket.on('error', () => close());
 
@@ -181,6 +191,8 @@ function createGateway(config, fetchImpl = fetch) {
                 throw new Error('GT06 source address is not assigned to this device');
               }
               device = registered;
+              clearTimeout(loginTimer);
+              loginTimer = null;
               result = handleGt06SessionFrame(frame, device.imei, false);
             } else {
               if (!device) throw new Error('GT06 data received before login');

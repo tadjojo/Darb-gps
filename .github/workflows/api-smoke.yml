@@ -27,6 +27,11 @@ jobs:
           status="$(curl --max-time 30 -sS -o /tmp/anonymous.json -w '%{http_code}' https://darb-gps-x.onrender.com/api/v1/organizations -H 'Content-Type: application/json' -d '{"name":"anonymous-smoke"}')"
           cat /tmp/anonymous.json
           test "$status" = "401"
+      - name: Check GPS credential rotation endpoint rejects anonymous requests
+        run: |
+          status="$(curl --max-time 30 -sS -o /tmp/gps-rotation-anonymous.json -w '%{http_code}' -X POST https://darb-gps-x.onrender.com/api/v1/tracking/devices/gps/00000000-0000-4000-8000-000000000001/rotate-credential)"
+          cat /tmp/gps-rotation-anonymous.json
+          test "$status" = "401"
       - name: Check login endpoint reaches Supabase Auth
         run: |
           status="$(curl --max-time 30 -sS -o /tmp/login.json -w '%{http_code}' -X POST https://darb-gps-x.onrender.com/api/v1/auth/login -H 'Content-Type: application/json' -d '{"identifier":"darb-smoke-00000000@example.invalid","password":"DarbSmokeInvalidPassword_2026!"}')"

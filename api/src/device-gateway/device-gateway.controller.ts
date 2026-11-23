@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, Post, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Headers, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { TrackingService } from '../tracking/tracking.service';
 import { TrackerLocationDto } from './dto/tracker-location.dto';
 import { NmeaIngestDto } from './dto/nmea-ingest.dto';
@@ -22,6 +22,7 @@ export class DeviceGatewayController {
     @Headers('authorization') authorization: string | undefined,
     @Body() dto: NmeaIngestDto,
   ) {
+    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     try {
       const fix = parseNmeaSentence(dto.sentence);
       const normalized = normalizeNmeaFix(fix, dto.pairedUtcTimestamp);
@@ -42,6 +43,7 @@ export class DeviceGatewayController {
     @Headers('authorization') authorization: string | undefined,
     @Body() dto: Gt06IngestDto,
   ) {
+    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     const offsetValue = process.env.GT06_TIMEZONE_OFFSET_MINUTES;
     if (offsetValue === undefined || !/^-?\d+$/.test(offsetValue)) {
       throw new ServiceUnavailableException('GT06_TIMEZONE_OFFSET_MINUTES must be configured before GT06 ingestion');

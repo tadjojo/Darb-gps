@@ -73,11 +73,11 @@ function loadConfig() {
   };
 }
 
-function createGateway(config) {
+function createGateway(config, fetchImpl = fetch) {
   let connections = 0;
 
   async function postToApi(path, device, body) {
-    const response = await fetch(config.apiBase + path, {
+    const response = await fetchImpl(config.apiBase + path, {
       method: 'POST',
       headers: {
         authorization: 'Bearer ' + device.bearerToken,

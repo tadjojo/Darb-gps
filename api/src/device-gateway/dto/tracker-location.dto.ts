@@ -1,4 +1,4 @@
-import { IsDateString, IsNumber, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsUUID, IsBoolean, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class TrackerLocationDto {
@@ -7,5 +7,6 @@ export class TrackerLocationDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(500) speedKmh?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(360) heading?: number;
   @IsOptional() @IsUUID() eventId?: string;
+  @IsOptional() @IsBoolean() tamper?: boolean;
   @IsDateString() recordedAt!: string;
 }

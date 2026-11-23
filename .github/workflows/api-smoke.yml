@@ -32,6 +32,12 @@ jobs:
           status="$(curl --max-time 30 -sS -o /tmp/login.json -w '%{http_code}' -X POST https://darb-gps-x.onrender.com/api/v1/auth/login -H 'Content-Type: application/json' -d '{"identifier":"darb-smoke-00000000@example.invalid","password":"DarbSmokeInvalidPassword_2026!"}')"
           cat /tmp/login.json
           test "$status" = "401"
+      - name: Check new alert endpoints reject anonymous requests
+        run: |
+          for endpoint in alerts alerts/rules; do
+            status="$(curl --max-time 30 -sS -o /tmp/alerts.json -w '%{http_code}' "https://darb-gps-x.onrender.com/api/v1/$endpoint")"
+            test "$status" = "401"
+          done
       - name: Check web-origin CORS preflight
         run: |
           headers="$(mktemp)"

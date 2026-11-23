@@ -80,7 +80,7 @@
   async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if (darbSocket) {
   darbSocket.disconnect();
   darbSocket = null;
-}token='';refreshToken='';sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
+}token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
   async function createOrganization(){
     const name=$('orgName').value.trim();
     const msg=$('settingsMessage');
@@ -183,8 +183,8 @@
     if(!token){$('alertRows').innerHTML='<tr><td colspan="6">سجّل الدخول لعرض التنبيهات.</td></tr>';return;}
     $('alertMessage').textContent='جارٍ تحميل التنبيهات…';
     const status=$('alertStatusFilter').value;
-    const [alerts,rules]=await Promise.all([api('/alerts?limit=200'+(status?'&status='+encodeURIComponent(status):'')),api('/alerts/rules')]);
-    alertCount=alerts.filter(a=>a.status==='open').length;updateStats();
+    const [alerts,openAlerts,rules]=await Promise.all([api('/alerts?limit=200'+(status?'&status='+encodeURIComponent(status):'')),api('/alerts?status=open&limit=200'),api('/alerts/rules')]);
+    alertCount=openAlerts.length;updateStats();
     $('alertRows').innerHTML=alerts.length?alerts.map(a=>'<tr><td dir="ltr">'+escapeHtml(new Date(a.occurred_at).toLocaleString('ar-JO'))+'</td><td>'+escapeHtml(a.vehicle_name||'—')+'</td><td>'+escapeHtml(alertTypeText[a.alert_type]||a.alert_type)+'</td><td>'+escapeHtml(a.message)+'</td><td><span class="status '+(a.status==='open'?'offline':'stopped')+'">'+escapeHtml(alertStatusText[a.status]||a.status)+'</span></td><td>'+(a.status==='open'?'<button class="outline-btn alert-ack-btn" data-action="acknowledge" data-id="'+escapeHtml(a.id)+'">تأكيد المراجعة</button>':'')+(a.status!=='resolved'?'<button class="outline-btn alert-ack-btn" data-action="resolve" data-id="'+escapeHtml(a.id)+'">إغلاق</button>':'—')+'</td></tr>').join(''):'<tr><td colspan="6">لا توجد تنبيهات ضمن هذا المرشح.</td></tr>';
     $('alertRuleRows').innerHTML=rules.length?rules.map(r=>'<tr><td>'+escapeHtml(r.name)+'</td><td>'+escapeHtml(r.vehicle_name||'—')+'</td><td>'+ (r.rule_type==='speed_limit'?'حد السرعة':'نطاق جغرافي')+'</td><td>'+ (r.rule_type==='speed_limit'?escapeHtml(r.config.limitKmh)+' كم/س':escapeHtml(r.config.radiusMeters)+' متر')+'</td><td>'+ (r.enabled?'مفعّلة':'متوقفة')+'</td></tr>').join(''):'<tr><td colspan="5">لا توجد قواعد بعد.</td></tr>';
     const options='<option value="">اختر المركبة</option>'+vehicles.filter(v=>v.id&&!String(v.id).startsWith('demo-')).map(v=>'<option value="'+escapeHtml(v.id)+'">'+escapeHtml(v.name)+' — '+escapeHtml(v.plate)+'</option>').join('');

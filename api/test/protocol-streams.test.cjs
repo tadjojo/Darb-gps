@@ -10,6 +10,11 @@ function makeGt06(protocol = 0x13, payload = Buffer.from([1,2,3])) {
   const crc = crc16Itt(body);
   return Buffer.concat([Buffer.from([0x78,0x78]), body, Buffer.from([crc >> 8, crc & 255, 0x0d, 0x0a])]);
 }
+function makeGt06Extended(protocol = 0x13, payload = Buffer.from([1,2,3])) {
+  const body = Buffer.concat([Buffer.from([0x00, payload.length + 5, protocol]), payload, Buffer.from([0x00,0x02])]);
+  const crc = crc16Itt(body);
+  return Buffer.concat([Buffer.from([0x79,0x79]), body, Buffer.from([crc >> 8, crc & 255, 0x0d, 0x0a])]);
+}
 function makeNmea(body) {
   let sum = 0; for (const c of body) sum ^= c.charCodeAt(0);
   return `$${body}*${sum.toString(16).padStart(2,'0').toUpperCase()}\r\n`;
@@ -50,4 +55,18 @@ test('NMEA stream decoder enforces line limits and control characters', () => {
   const decoder = new NmeaStreamDecoder(32);
   assert.throws(() => decoder.push('A'.repeat(33)), /maximum length/);
   assert.throws(() => new NmeaStreamDecoder().push('bad\u0001line'), /control characters/);
+});
+
+test('GT06 extended 0x7979 frames parse and reassemble across chunks', () => {
+  const frame = makeGt06Extended(0x13, Buffer.from([0x46, 0x06, 0x04]));
+  const parsed = parseGt06Frame(frame);
+  assert.equal(parsed.extended, true);
+  assert.equal(parsed.protocol, 0x13);
+  assert.equal(parsed.serial, 2);
+  const decoder = new Gt06StreamDecoder();
+  assert.deepEqual(decoder.push(frame.subarray(0, 3)), []);
+  const out = decoder.push(Buffer.concat([frame.subarray(3), makeGt06()]));
+  assert.equal(out.length, 2);
+  assert.equal(parseGt06Frame(out[0]).extended, true);
+  assert.equal(parseGt06Frame(out[1]).extended, false);
 });

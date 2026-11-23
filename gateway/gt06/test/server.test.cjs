@@ -114,7 +114,7 @@ test('NMEA TCP gateway maps a trusted source IP and forwards RMC with paired GGA
     const rmc = makeNmea('GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,,,A');
     const gga = makeNmea('GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,');
     socket.write(rmc + gga);
-    await Promise.race([bothCalls, new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for NMEA forwarding')), 3000))]);
+    await Promise.race([bothCalls, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error('Timed out waiting for NMEA forwarding')), 3000); timer.unref(); })]);
     assert.equal(calls.length, 2);
     assert.equal(calls[0].url, 'https://darb-api.example/api/v1/device-gateway/ingest/nmea');
     assert.equal(calls[1].url, calls[0].url);

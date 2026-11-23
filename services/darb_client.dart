@@ -167,7 +167,7 @@ class DarbClient {
   }
 
   Future<Map<String, dynamic>> sendLocation(Map<String, dynamic> payload) async {
-    final response = await authorized('POST', '/api/v1/tracking/mobile/location', body: payload);
+    final response = await authorized('POST', '/api/v1/tracking/locations', body: payload);
     return _decode(response);
   }
 

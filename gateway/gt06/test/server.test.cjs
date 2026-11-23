@@ -16,4 +16,5 @@ test('GT06 gateway rejects invalid CIDR configuration', () => {
   assert.throws(() => parseCidr('not-an-ip/24'), /valid IPv4 CIDR/);
   assert.throws(() => parseCidr('203.0.113.0/33'), /valid IPv4 CIDR/);
   assert.throws(() => parseCidr('203.0.113.0/-1'), /valid IPv4 CIDR/);
+  assert.throws(() => parseCidr('0.0.0.0/0'), /valid IPv4 CIDR/);
 });

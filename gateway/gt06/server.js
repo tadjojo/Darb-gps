@@ -46,24 +46,30 @@ function loadConfig() {
   const devices = new Map();
   for (const [imei, value] of Object.entries(rawDevices)) {
     if (!/^[0-9]{15}$/.test(imei) || !value || typeof value !== 'object' ||
-        typeof value.bearerToken !== 'string' || value.bearerToken.length < 32 ||
-        !Number.isInteger(value.timezoneOffsetMinutes) ||
-        value.timezoneOffsetMinutes < -840 || value.timezoneOffsetMinutes > 840) {
-      throw new Error('Each GT06 device entry requires a 15-digit IMEI, bearerToken, and timezoneOffsetMinutes (-840..840)');
+        typeof value.bearerToken !== 'string' || value.bearerToken.length < 32) {
+      throw new Error('Each GT06 device entry requires a 15-digit IMEI and a bearerToken of at least 32 characters');
     }
-    devices.set(imei, { imei, bearerToken: value.bearerToken, timezoneOffsetMinutes: value.timezoneOffsetMinutes });
+    devices.set(imei, { imei, bearerToken: value.bearerToken });
   }
   if (devices.size === 0) throw new Error('Configure at least one enrolled device in GT06_DEVICE_MAP_JSON');
   const trustedText = (process.env.TRUSTED_DEVICE_CIDRS || '').split(',').map(x => x.trim()).filter(Boolean);
   if (trustedText.length === 0) throw new Error('TRUSTED_DEVICE_CIDRS is required; do not expose IMEI-only login to the public internet');
   const trustedRanges = trustedText.map(parseCidr);
+  const port = Number(process.env.GT06_PORT || 5023);
+  const maxConnections = Number(process.env.MAX_CONNECTIONS || 500);
+  const idleTimeoutMs = Number(process.env.IDLE_TIMEOUT_MS || 120000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535 ||
+      !Number.isInteger(maxConnections) || maxConnections < 1 || maxConnections > 5000 ||
+      !Number.isInteger(idleTimeoutMs) || idleTimeoutMs < 10000 || idleTimeoutMs > 3600000) {
+    throw new Error('Invalid GT06_PORT, MAX_CONNECTIONS, or IDLE_TIMEOUT_MS setting');
+  }
   return {
     apiBase: apiBase.toString().replace(/\/$/, ''),
     devices,
     trustedRanges,
-    port: Number(process.env.GT06_PORT || 5023),
-    maxConnections: Number(process.env.MAX_CONNECTIONS || 500),
-    idleTimeoutMs: Number(process.env.IDLE_TIMEOUT_MS || 120000),
+    port,
+    maxConnections,
+    idleTimeoutMs,
   };
 }
 

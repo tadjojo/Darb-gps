@@ -83,3 +83,30 @@ export function parseGt06Location(frame: Gt06Frame): Gt06Location {
     gpsFixed,
   };
 }
+
+export interface Gt06Login {
+  imei: string;
+  serial: number;
+}
+
+/** Parse the common 0x01 login layout: 8-byte BCD IMEI, optional 4-byte model/timezone extension. */
+export function parseGt06Login(frame: Gt06Frame): Gt06Login {
+  if (frame.protocol !== 0x01) throw new Error('GT06 frame is not a login packet');
+  if (frame.payload.length !== 8 && frame.payload.length !== 12) {
+    throw new Error('Unsupported GT06 login layout; expected 8-byte IMEI with optional 4-byte extension');
+  }
+  const digits = frame.payload.subarray(0, 8).toString('hex').toUpperCase();
+  if (!/^[0-9]{16}$/.test(digits)) throw new Error('GT06 login IMEI is not valid BCD');
+  const imei = digits.startsWith('0') ? digits.slice(1) : digits;
+  if (!/^[0-9]{15}$/.test(imei)) throw new Error('GT06 login does not contain a 15-digit IMEI');
+  return { imei, serial: frame.serial };
+}
+
+/** Build the standard 0x7878 server acknowledgement for a protocol and serial. */
+export function buildGt06Ack(protocol: number, serial: number): Buffer {
+  if (!Number.isInteger(protocol) || protocol < 0 || protocol > 0xff) throw new Error('Invalid GT06 protocol number');
+  if (!Number.isInteger(serial) || serial < 0 || serial > 0xffff) throw new Error('Invalid GT06 serial number');
+  const body = Buffer.from([0x05, protocol, (serial >> 8) & 0xff, serial & 0xff]);
+  const crc = crc16Itt(body);
+  return Buffer.concat([Buffer.from([0x78, 0x78]), body, Buffer.from([crc >> 8, crc & 0xff, 0x0d, 0x0a])]);
+}

@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { TrackingModule } from './tracking/tracking.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -13,6 +14,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
     AuthModule,
     HealthModule,
     OrganizationsModule,
+    TrackingModule,
   ],
 })
 export class AppModule {}

@@ -150,6 +150,7 @@ export class TrackingService {
         [row.id],
       );
       await client.query('COMMIT');
+      await this.alerts.markDeviceOnline(row.id).catch((error) => console.error('GPS tracker recovery alert update failed', error));
       await this.alerts.evaluateLocation(inserted.rows[0]).catch((error) => console.error('GPS tracker alert evaluation failed', error));
       await this.publishIfLatest(inserted.rows[0]);
       return { accepted: true, duplicate: false, location: inserted.rows[0] };
@@ -208,6 +209,7 @@ export class TrackingService {
         [dto.deviceId],
       );
       await client.query('COMMIT');
+      if (dto.deviceId) await this.alerts.markDeviceOnline(dto.deviceId).catch((error) => console.error('Mobile tracking recovery alert update failed', error));
       await this.alerts.evaluateLocation(result.rows[0]).catch((error) => console.error('Mobile tracking alert evaluation failed', error));
       await this.publishIfLatest(result.rows[0]);
       return { accepted: true, duplicate: false, location: result.rows[0] };

@@ -8,7 +8,7 @@
     {id:'demo-4',name:'شاحنة الأسطول 08',plate:'45-11762',driver:'سامي يوسف',status:'offline',updated:'منذ ساعتين',lat:32.015,lng:35.728},
     {id:'demo-5',name:'مركبة المتابعة 06',plate:'12-66310',driver:'ليث محمود',status:'moving',updated:'منذ 5 دقائق',lat:31.71,lng:35.793}
   ];
-  let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
+  let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, routeMarkers = [], token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
   let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-x.onrender.com/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
   const statusText = {moving:'تتحرك',stopped:'متوقفة',offline:'غير متصلة'};
   const vehicleRow = v => `<tr><td><div class="vehicle-cell"><span class="vehicle-icon">▰</span>${escapeHtml(v.name)}</div></td><td dir="ltr">${escapeHtml(v.plate || '—')}</td><td>${escapeHtml(v.driver || '—')}</td><td><span class="status ${v.status}">${statusText[v.status] || 'غير معروف'}</span></td><td>${escapeHtml(v.updated || '—')}</td>${v.id?.startsWith('demo-')?'':'<td></td>'}</tr>`;
@@ -167,9 +167,11 @@
       setTimeout(()=>{
         if(!window.L||!mapB)return;
         if(routeLayer)mapB.removeLayer(routeLayer);
+        routeMarkers.forEach(marker=>mapB.removeLayer(marker));
+        routeMarkers=[];
         routeLayer=L.polyline(coordinates,{color:'#1769aa',weight:5,opacity:.9}).addTo(mapB);
-        L.circleMarker(coordinates[0],{radius:7,color:'#fff',weight:2,fillColor:'#159b70',fillOpacity:1}).addTo(mapB).bindPopup('بداية الرحلة');
-        L.circleMarker(coordinates[coordinates.length-1],{radius:7,color:'#fff',weight:2,fillColor:'#d34b4b',fillOpacity:1}).addTo(mapB).bindPopup('نهاية الرحلة');
+        routeMarkers.push(L.circleMarker(coordinates[0],{radius:7,color:'#fff',weight:2,fillColor:'#159b70',fillOpacity:1}).addTo(mapB).bindPopup('بداية الرحلة'));
+        routeMarkers.push(L.circleMarker(coordinates[coordinates.length-1],{radius:7,color:'#fff',weight:2,fillColor:'#d34b4b',fillOpacity:1}).addTo(mapB).bindPopup('نهاية الرحلة'));
         mapB.invalidateSize();
         mapB.fitBounds(routeLayer.getBounds(),{padding:[24,24]});
       },150);

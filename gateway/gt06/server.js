@@ -281,7 +281,7 @@ if (require.main === module) {
     const nmeaServer = createNmeaGateway(config);
     servers.push(nmeaServer);
     nmeaServer.listen(config.nmeaPort, '0.0.0.0', () => {
-      process.stdout.write('[nmea-gateway] listening on TCP port ' + config.nmeaPort + '; mapped source IPs: ' + config.nmeaDevices.size + '\\n');
+      process.stdout.write('[nmea-gateway] listening on TCP port ' + config.nmeaPort + '; mapped source IPs: ' + config.nmeaDevices.size + '\n');
     });
   }
   const shutdown = () => Promise.all(servers.map(item => new Promise(resolve => item.close(resolve))))

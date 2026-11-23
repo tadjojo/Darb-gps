@@ -48,10 +48,12 @@ function loadConfig() {
   const devices = new Map();
   for (const [imei, value] of Object.entries(rawDevices)) {
     if (!/^[0-9]{15}$/.test(imei) || !value || typeof value !== 'object' ||
-        typeof value.bearerToken !== 'string' || value.bearerToken.length < 32) {
-      throw new Error('Each GT06 device entry requires a 15-digit IMEI and a bearerToken of at least 32 characters');
+        typeof value.bearerToken !== 'string' || value.bearerToken.length < 32 ||
+        !Array.isArray(value.sourceCidrs) || value.sourceCidrs.length === 0) {
+      throw new Error('Each GT06 device entry requires a 15-digit IMEI, bearerToken of at least 32 characters, and non-empty sourceCidrs array');
     }
-    devices.set(imei, { imei, bearerToken: value.bearerToken });
+    const sourceRanges = value.sourceCidrs.map(parseCidr);
+    devices.set(imei, { imei, bearerToken: value.bearerToken, sourceRanges });
   }
   if (devices.size === 0) throw new Error('Configure at least one enrolled device in GT06_DEVICE_MAP_JSON');
   const trustedText = (process.env.TRUSTED_DEVICE_CIDRS || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -155,6 +157,9 @@ function createGateway(config, fetchImpl = fetch) {
               const login = parseGt06Login(frame);
               const registered = config.devices.get(login.imei);
               if (!registered) throw new Error('Unregistered GT06 IMEI');
+              if (!isTrustedAddress(socket.remoteAddress, registered.sourceRanges)) {
+                throw new Error('GT06 source address is not assigned to this device');
+              }
               device = registered;
               result = handleGt06SessionFrame(frame, device.imei, false);
             } else {

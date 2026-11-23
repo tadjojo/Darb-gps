@@ -35,6 +35,41 @@ console.log('[AUTH ENV CHECK]', {
     });
   }
 
+  async refresh(refreshToken: string) {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+    const supabase = this.createSupabaseClient();
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+    if (error || !data.session) {
+      throw new UnauthorizedException('Refresh token is invalid or expired');
+    }
+    return {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+    };
+  }
+
+  async logout(accessToken: string | undefined, refreshToken: string) {
+    if (!refreshToken || typeof refreshToken !== 'string') return;
+    const supabase = this.createSupabaseClient();
+    let sessionReady = false;
+    if (accessToken) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      sessionReady = !error && Boolean(data.session);
+    }
+    if (!sessionReady) {
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+      sessionReady = !error && Boolean(data.session);
+    }
+    if (sessionReady) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+  }
+
   async login(identifier: string, password: string) {
     const supabase = this.createSupabaseClient();
     const value = identifier.trim();

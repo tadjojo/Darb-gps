@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-Set-Location (Split-Path -Parent $PSScriptRoot)
+Set-Location $PSScriptRoot
 
 if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
   throw 'Flutter SDK is not installed or not on PATH. Install Flutter stable and Android Studio/Android SDK.'

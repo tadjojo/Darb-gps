@@ -1,0 +1,101 @@
+name: DARB GPS Android CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/android-debug-apk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/android-debug-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android runner
+        run: flutter create --platforms=android --org com.darb --project-name darb_gps .
+      - name: Configure Android location permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          marker = '<manifest'
+          permissions = '''
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+          '''
+          if 'android.permission.ACCESS_FINE_LOCATION' not in text:
+              text = text.replace('    <application', permissions + '\n    <application', 1)
+          path.write_text(text)
+          PY
+      - name: Install project tests
+        run: |
+          cat > test/widget_test.dart <<'EOF'
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:latlong2/latlong.dart';
+          import 'package:darb_gps/services/navigation_service.dart';
+
+          void main() {
+            group('NavigationService', () {
+              test('short search queries return an empty result', () async {
+                final service = NavigationService();
+                expect(await service.searchPlaces('ع'), isEmpty);
+                service.close();
+              });
+
+              test('invalid route coordinates are rejected before network access', () async {
+                final service = NavigationService();
+                await expectLater(
+                  service.getDrivingRoutes(
+                    const LatLng(91, 0),
+                    const LatLng(31, 36),
+                  ),
+                  throwsA(isA<NavigationException>()),
+                );
+                service.close();
+              });
+            });
+          }
+          EOF
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Analyze Dart code
+        run: flutter analyze --no-fatal-infos
+      - name: Run Flutter tests
+        run: flutter test
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: darb-gps-android-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

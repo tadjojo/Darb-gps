@@ -1,0 +1,28 @@
+name: DARB GPS Web Checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "index.html"
+      - "styles.css"
+      - ".github/workflows/web-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "index.html"
+      - "styles.css"
+      - ".github/workflows/web-check.yml"
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: node --check app.js

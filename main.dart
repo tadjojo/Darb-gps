@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geolocator_android/geolocator_android.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 import 'services/darb_client.dart';
@@ -54,7 +54,7 @@ class _HomePageState extends State<HomePage> {
   int selectedRouteIndex = 0;
   bool searchingPlaces = false, calculatingRoute = false;
   int _placeSearchGeneration = 0, _routeGeneration = 0;
-  final _apiUrl = TextEditingController(text: 'http://10.0.2.2:3000');
+  final _apiUrl = TextEditingController(text: 'https://darb-gps-x.onrender.com');
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   final _orgName = TextEditingController(text: 'مؤسستي');

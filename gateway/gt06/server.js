@@ -250,7 +250,7 @@ function createNmeaGateway(config, fetchImpl = fetch) {
               if (rmcClock === ggaClock) await postToApi(device, line, lastRmcTimestamp);
             }
           } catch (error) {
-            process.stderr.write('[nmea-gateway] session closed: ' + (error instanceof Error ? error.message : 'sentence error') + '\\n');
+            process.stderr.write('[nmea-gateway] session closed: ' + (error instanceof Error ? error.message : 'sentence error') + '\n');
             close();
             break;
           }

@@ -1,32 +1,35 @@
 # GPS protocol adapters
 
-The parsers and normalizers in this folder are pure decoding helpers. They do
-not open sockets, authenticate devices, write locations, or acknowledge tracker
-packets. The existing credential-authenticated HTTPS JSON ingestion endpoint
-remains the only ingestion path until a separately secured TCP gateway is built.
+Parsers, stream framers, normalizers, and HTTPS adapters are separate layers.
+No raw TCP socket is exposed by the API service. The existing credential-
+authenticated tracker ingestion method remains the single path that writes
+locations, evaluates alerts, and publishes latest positions.
 
-## NMEA 0183
+## HTTPS ingestion adapters
 
-Supported sentences: GPRMC/GNRMC and GPGGA/GNGGA. Checksums are mandatory.
-RMC supplies UTC date/time and motion; GGA supplies fix quality, satellites,
-altitude, and coordinates but has no date. A GGA fix must be paired with a
-trusted UTC timestamp from the same device stream/session before ingestion.
-The normalizer never substitutes server time.
+- Existing JSON: `POST /api/v1/device-gateway/ingest`
+- NMEA: `POST /api/v1/device-gateway/ingest/nmea`, body `{ "sentence": "$GPRMC...*CS" }`
+  with optional `pairedUtcTimestamp` for GGA. RMC uses its own UTC date/time.
+- GT06: `POST /api/v1/device-gateway/ingest/gt06`, body `{ "frameHex": "7878..." }`.
+  Configure `GT06_TIMEZONE_OFFSET_MINUTES` as an integer minutes east of UTC.
+  This initial setting is global to the service; use only when all connected
+  devices share that timezone. A per-device timezone/profile registry is a
+  prerequisite for multi-region fleets.
 
-## GT06
+All three endpoints require the existing per-tracker Bearer credential.
+The NMEA endpoint requires checksum validation and refuses GGA unless the
+trusted relay supplies a paired UTC timestamp. The GT06 endpoint accepts only
+the classic 0x7878 / 0x12 location profile implemented here.
 
-The first implementation supports classic 0x7878 short frames, CRC-ITU
-validation, and the common 0x12 location payload. It intentionally does not
-claim support for 0x7979 extended frames, vendor-specific location layouts,
-terminal-ID-prefixed location packets, alarms, or every GT06-branded device.
-The six-byte device clock is interpreted only using an explicitly configured
-fixed UTC offset in minutes. Regions with daylight-saving changes must resolve
-the offset for the actual recorded date in the device profile.
+## TCP gateway boundary
 
-## Production integration
+The incremental stream decoders reassemble fragmented GT06 frames and NMEA
+CRLF sentences, but they do not open sockets, authenticate device IMEIs, or
+send protocol acknowledgements. A future public TCP relay must perform those
+tasks, map authenticated IMEIs to existing per-device credentials, and forward
+normalized payloads over HTTPS to this API.
 
-A future TCP gateway must bind authenticated device identity to a configured
-model profile, parse stream framing (including partial/multiple frames),
-perform the required protocol acknowledgements, and forward normalized fixes
-through the existing credential-authenticated HTTPS ingestion path. Do not
-expose an unauthenticated raw socket or assume an HTTP service accepts raw TCP.
+Render private services support arbitrary TCP only on the private network, not
+from public GPS hardware. Render web services expose public HTTP(S) on one
+port; additional ports are private-network only. Therefore do not deploy a raw
+GPS listener as a Render private service expecting trackers on the internet.

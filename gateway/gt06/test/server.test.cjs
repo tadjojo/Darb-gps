@@ -44,7 +44,7 @@ test('GT06 TCP gateway logs in, forwards heartbeat/location, and ACKs only accep
   const token = 'test-device-bearer-token-0123456789';
   const server = createGateway({
     apiBase: 'https://darb-api.example/api/v1',
-    devices: new Map([[imei, { imei, bearerToken: token }]]),
+    devices: new Map([[imei, { imei, bearerToken: token, sourceRanges: [parseCidr('127.0.0.1/32')] }]]),
     trustedRanges: [parseCidr('127.0.0.1/32')],
     maxConnections: 10,
     idleTimeoutMs: 30000,
@@ -78,6 +78,38 @@ test('GT06 TCP gateway logs in, forwards heartbeat/location, and ACKs only accep
     assert.equal(calls[1].url, 'https://darb-api.example/api/v1/device-gateway/ingest/gt06');
     for (const call of calls) assert.equal(call.options.headers.authorization, 'Bearer ' + token);
     assert.deepEqual(JSON.parse(calls[1].options.body), { frameHex: location.toString('hex') });
+  } finally {
+    socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('GT06 gateway rejects an enrolled IMEI from a different trusted APN source address', async () => {
+  const calls = [];
+  const imei = '353419032332707';
+  const server = createGateway({
+    apiBase: 'https://darb-api.example/api/v1',
+    devices: new Map([[imei, {
+      imei,
+      bearerToken: 'test-device-bearer-token-0123456789',
+      sourceRanges: [parseCidr('127.0.0.2/32')],
+    }]]),
+    trustedRanges: [parseCidr('127.0.0.1/32')],
+    maxConnections: 10,
+    idleTimeoutMs: 30000,
+  }, async () => {
+    calls.push(true);
+    return { ok: true, status: 200, text: async () => '' };
+  });
+
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const socket = net.createConnection(server.address().port, '127.0.0.1');
+  try {
+    await once(socket, 'connect');
+    const closed = once(socket, 'close');
+    socket.write(makeFrame(0x01, Buffer.from('0353419032332707', 'hex'), 0x004e));
+    await closed;
+    assert.equal(calls.length, 0);
   } finally {
     socket.destroy();
     await new Promise(resolve => server.close(resolve));

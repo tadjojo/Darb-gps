@@ -5,31 +5,42 @@ No raw TCP socket is exposed by the API service. The existing credential-
 authenticated tracker ingestion method remains the single path that writes
 locations, evaluates alerts, and publishes latest positions.
 
-## HTTPS ingestion adapters
+## Device enrollment and profiles
+
+Enroll a hardware tracker through authenticated `POST /api/v1/tracking/devices/gps`:
+
+- `vehicleId` and optional `label`
+- `protocol`: `json` (default), `gt06`, or `nmea`
+- `imei`: unique hardware identifier (required for GT06 and NMEA profiles)
+- `model`: optional model/profile label
+- `timezoneOffsetMinutes`: required for GT06, minutes east of UTC (Jordan standard time is +180; daylight-saving devices must be configured for their actual local clock behavior)
+
+The API returns a random device credential once. Only its SHA-256 hash is stored.
+IMEI is unique across registered trackers. Device credentials remain the
+authentication authority for incoming data; IMEI is metadata until a TCP
+listener implements the model-specific login handshake.
+
+## HTTPS ingestion
 
 - Existing JSON: `POST /api/v1/device-gateway/ingest`
 - NMEA: `POST /api/v1/device-gateway/ingest/nmea`, body `{ "sentence": "$GPRMC...*CS" }`
   with optional `pairedUtcTimestamp` for GGA. RMC uses its own UTC date/time.
 - GT06: `POST /api/v1/device-gateway/ingest/gt06`, body `{ "frameHex": "7878..." }`.
-  Configure `GT06_TIMEZONE_OFFSET_MINUTES` as an integer minutes east of UTC.
-  This initial setting is global to the service; use only when all connected
-  devices share that timezone. A per-device timezone/profile registry is a
-  prerequisite for multi-region fleets.
 
-All three endpoints require the existing per-tracker Bearer credential.
-The NMEA endpoint requires checksum validation and refuses GGA unless the
-trusted relay supplies a paired UTC timestamp. The GT06 endpoint accepts only
-the classic 0x7878 / 0x12 location profile implemented here.
+All endpoints require the enrolled per-device Bearer credential and reject a
+protocol that differs from the device's stored profile. GT06 uses that device's
+timezone offset; no service-wide timezone setting is used. GGA requires a
+trusted paired UTC timestamp. Only the classic 0x7878 / 0x12 GT06 location
+profile is currently supported.
 
 ## TCP gateway boundary
 
-The incremental stream decoders reassemble fragmented GT06 frames and NMEA
-CRLF sentences, but they do not open sockets, authenticate device IMEIs, or
-send protocol acknowledgements. A future public TCP relay must perform those
-tasks, map authenticated IMEIs to existing per-device credentials, and forward
-normalized payloads over HTTPS to this API.
+Incremental stream decoders reassemble fragmented GT06 frames and NMEA CRLF
+sentences, but do not open sockets, authenticate IMEI login packets, or send
+protocol acknowledgements. A future public TCP relay must perform model-aware
+IMEI authentication, bind the connection to this device registry, apply
+connection/rate limits, and forward normalized payloads over HTTPS.
 
-Render private services support arbitrary TCP only on the private network, not
-from public GPS hardware. Render web services expose public HTTP(S) on one
-port; additional ports are private-network only. Therefore do not deploy a raw
-GPS listener as a Render private service expecting trackers on the internet.
+Render private services accept TCP only from Render's private network; they
+are not public endpoints for GPS hardware. Do not deploy a raw GPS listener
+there expecting internet-facing trackers.

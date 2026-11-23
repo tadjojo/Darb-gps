@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseNmeaSentence } = require('../dist/device-gateway/protocols/nmea.parser');
 const { crc16Itt, parseGt06Frame, parseGt06Location } = require('../dist/device-gateway/protocols/gt06.parser');
+const { normalizeGt06Location, normalizeNmeaFix } = require('../dist/device-gateway/protocols/normalize-location');
 
 function nmea(body) {
   let checksum = 0;
@@ -16,12 +17,15 @@ test('NMEA RMC validates checksum and converts knots to km/h', () => {
   assert.ok(Math.abs(fix.longitude - 11.5166667) < 0.000001);
   assert.ok(Math.abs(fix.speedKmh - 41.4848) < 0.001);
   assert.equal(fix.recordedAt, '1994-03-23T12:35:19.000Z');
+  assert.equal(normalizeNmeaFix(fix).recordedAt, fix.recordedAt);
 });
 
-test('NMEA GGA parses a valid fix and rejects no-fix quality', () => {
+test('NMEA GGA requires a trusted paired UTC timestamp', () => {
   const fix = parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,'));
   assert.equal(fix.satellites, 8);
   assert.equal(fix.altitudeMeters, 545.4);
+  assert.throws(() => normalizeNmeaFix(fix), /trusted paired UTC timestamp/);
+  assert.equal(normalizeNmeaFix(fix, '2026-11-23T12:35:19.000Z').recordedAt, '2026-11-23T12:35:19.000Z');
   assert.throws(() => parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,0,00,9.9,0.0,M,0.0,M,,')));
 });
 
@@ -44,6 +48,10 @@ test('GT06 validates CRC and decodes common 0x12 location packet', () => {
   assert.ok(Math.abs(fix.longitude - 114.409285) < 0.00001);
   assert.equal(fix.heading, 143);
   assert.equal(fix.gpsFixed, true);
+  const normalized = normalizeGt06Location(fix, 480);
+  assert.equal(normalized.recordedAt, '2026-02-12T02:30:50.000Z');
+  assert.throws(() => normalizeGt06Location({ ...fix, gpsFixed: false }, 180), /valid GPS fix/);
+  assert.throws(() => normalizeGt06Location(fix, 9999), /timezone offset/);
   assert.throws(() => parseGt06Frame(Buffer.from([...frame.slice(0, -4), 0, 0, 0x0d, 0x0a])));
 });
 

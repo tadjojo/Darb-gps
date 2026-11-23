@@ -159,7 +159,7 @@ export class TrackingService {
     const credentialHash = createHash('sha256').update(secret).digest('hex');
     const result = await this.pool.query(
       `UPDATE private.darb_tracking_devices d
-          SET credential_hash = $3, last_seen_at = NULL
+          SET credential_hash = $3
         WHERE d.id = $1 AND d.status = 'active'
           AND EXISTS (SELECT 1 FROM vehicle_members vm
             WHERE vm.vehicle_id = d.vehicle_id AND vm.user_id = $2

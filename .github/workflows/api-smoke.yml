@@ -32,6 +32,26 @@ jobs:
           status="$(curl --max-time 30 -sS -o /tmp/gps-rotation-anonymous.json -w '%{http_code}' -X POST https://darb-gps-x.onrender.com/api/v1/tracking/devices/gps/00000000-0000-4000-8000-000000000001/rotate-credential)"
           cat /tmp/gps-rotation-anonymous.json
           test "$status" = "401"
+      - name: Check GPS device management endpoints reject anonymous requests
+        run: |
+          device_id="00000000-0000-4000-8000-000000000001"
+          for endpoint in "tracking/devices/gps" "tracking/devices/gps/$device_id/revoke"; do
+            status="$(curl --max-time 30 -sS -o /tmp/gps-management.json -w '%{http_code}' -X POST "https://darb-gps-x.onrender.com/api/v1/$endpoint" -H 'Content-Type: application/json' -d '{"vehicleId":"00000000-0000-4000-8000-000000000002","protocol":"json"}')"
+            test "$status" = "401"
+          done
+      - name: Check all HTTP GPS ingestion protocols reject invalid credentials
+        run: |
+          base="https://darb-gps-x.onrender.com/api/v1/device-gateway"
+          auth='Authorization: Bearer invalid-smoke-credential'
+          recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          status="$(curl --max-time 30 -sS -o /tmp/gps-ingest.json -w '%{http_code}' -X POST "$base/ingest" -H "$auth" -H 'Content-Type: application/json' -d "{\"latitude\":31.9539,\"longitude\":35.9106,\"recordedAt\":\"$recorded_at\"}")"
+          test "$status" = "401"
+          status="$(curl --max-time 30 -sS -o /tmp/gps-nmea.json -w '%{http_code}' -X POST "$base/ingest/nmea" -H "$auth" -H 'Content-Type: application/json' -d '{"sentence":"$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A"}')"
+          test "$status" = "401"
+          status="$(curl --max-time 30 -sS -o /tmp/gps-gt06.json -w '%{http_code}' -X POST "$base/ingest/gt06" -H "$auth" -H 'Content-Type: application/json' -d '{"frameHex":"78780D010353419032332707004B7DB80D0A"}')"
+          test "$status" = "401"
+          status="$(curl --max-time 30 -sS -o /tmp/gps-heartbeat.json -w '%{http_code}' -X POST "$base/heartbeat/gt06" -H "$auth")"
+          test "$status" = "401"
       - name: Check login endpoint reaches Supabase Auth
         run: |
           status="$(curl --max-time 30 -sS -o /tmp/login.json -w '%{http_code}' -X POST https://darb-gps-x.onrender.com/api/v1/auth/login -H 'Content-Type: application/json' -d '{"identifier":"darb-smoke-00000000@example.invalid","password":"DarbSmokeInvalidPassword_2026!"}')"

@@ -27,10 +27,10 @@ export class OrganizationsService {
       await client.query('BEGIN');
 
       const created = await client.query(
-        `INSERT INTO organizations (name)
-         VALUES ($1)
-         RETURNING id, name, status, created_at`,
-        [dto.name.trim()],
+        `INSERT INTO organizations (name, created_by)
+         VALUES ($1, $2)
+         RETURNING id, name, status, created_at, created_by`,
+        [dto.name.trim(), user.sub],
       );
 
       await client.query(

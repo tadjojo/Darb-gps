@@ -3,6 +3,7 @@ export interface Gt06Frame {
   serial: number;
   payload: Buffer;
   raw: Buffer;
+  extended?: boolean;
 }
 
 export interface Gt06Location {
@@ -26,22 +27,28 @@ export function crc16Itt(data: Buffer): number {
 
 /** Decode one classic 0x7878 GT06 frame. Stream reassembly belongs to the TCP adapter. */
 export function parseGt06Frame(input: Buffer): Gt06Frame {
-  if (input.length < 10 || input[0] !== 0x78 || input[1] !== 0x78) throw new Error('Invalid GT06 start or truncated frame');
-  const length = input[2];
-  const expectedLength = length + 5;
+  if (input.length < 10) throw new Error('Invalid GT06 start or truncated frame');
+  const shortFrame = input[0] === 0x78 && input[1] === 0x78;
+  const extendedFrame = input[0] === 0x79 && input[1] === 0x79;
+  if (!shortFrame && !extendedFrame) throw new Error('Invalid GT06 start marker');
+  const headerLength = shortFrame ? 3 : 4;
+  if (input.length < headerLength + 7) throw new Error('Truncated GT06 frame header');
+  const length = shortFrame ? input[2] : input.readUInt16BE(2);
+  const expectedLength = length + (shortFrame ? 5 : 6);
   if (length < 5 || input.length !== expectedLength) throw new Error('Invalid GT06 frame length');
   if (input[input.length - 2] !== 0x0d || input[input.length - 1] !== 0x0a) throw new Error('Invalid GT06 stop bits');
   const crcOffset = input.length - 4;
   const expectedCrc = crc16Itt(input.subarray(2, crcOffset));
   const receivedCrc = input.readUInt16BE(crcOffset);
   if (receivedCrc !== expectedCrc) throw new Error('GT06 CRC-ITU mismatch');
-  const protocol = input[3];
+  const protocol = input[headerLength];
   const serialOffset = crcOffset - 2;
   return {
     protocol,
     serial: input.readUInt16BE(serialOffset),
-    payload: Buffer.from(input.subarray(4, serialOffset)),
+    payload: Buffer.from(input.subarray(headerLength + 1, serialOffset)),
     raw: Buffer.from(input),
+    extended: extendedFrame,
   };
 }
 
@@ -103,10 +110,13 @@ export function parseGt06Login(frame: Gt06Frame): Gt06Login {
 }
 
 /** Build the standard 0x7878 server acknowledgement for a protocol and serial. */
-export function buildGt06Ack(protocol: number, serial: number): Buffer {
+export function buildGt06Ack(protocol: number, serial: number, extended = false): Buffer {
   if (!Number.isInteger(protocol) || protocol < 0 || protocol > 0xff) throw new Error('Invalid GT06 protocol number');
   if (!Number.isInteger(serial) || serial < 0 || serial > 0xffff) throw new Error('Invalid GT06 serial number');
-  const body = Buffer.from([0x05, protocol, (serial >> 8) & 0xff, serial & 0xff]);
+  const body = extended
+    ? Buffer.from([0x00, 0x05, protocol, (serial >> 8) & 0xff, serial & 0xff])
+    : Buffer.from([0x05, protocol, (serial >> 8) & 0xff, serial & 0xff]);
   const crc = crc16Itt(body);
-  return Buffer.concat([Buffer.from([0x78, 0x78]), body, Buffer.from([crc >> 8, crc & 0xff, 0x0d, 0x0a])]);
+  const start = extended ? Buffer.from([0x79, 0x79]) : Buffer.from([0x78, 0x78]);
+  return Buffer.concat([start, body, Buffer.from([crc >> 8, crc & 0xff, 0x0d, 0x0a])]);
 }

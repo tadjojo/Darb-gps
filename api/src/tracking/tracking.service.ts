@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.constants';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { IngestLocationDto } from './dto/ingest-location.dto';
+import { TrackerLocationDto } from '../device-gateway/dto/tracker-location.dto';
 
 @Injectable()
 export class TrackingService {
@@ -57,7 +58,7 @@ export class TrackingService {
     return { revoked: true, deviceId };
   }
 
-  async ingestGpsTracker(authorization: string | undefined, dto: IngestLocationDto) {
+  async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto) {
     if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
     const secret = authorization.replace(/^Bearer\\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');

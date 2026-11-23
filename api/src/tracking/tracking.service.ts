@@ -44,6 +44,38 @@ export class TrackingService {
     }
   }
 
+  async enrollMobileDevice(user: AuthenticatedUser, vehicleId: string) {
+    const access = await this.pool.query(
+      `SELECT 1 FROM public.vehicles v JOIN public.vehicle_members vm ON vm.vehicle_id = v.id
+        WHERE v.id = $1 AND v.status = 'active' AND vm.user_id = $2
+          AND vm.status = 'active' AND vm.role IN ('owner','manager','driver')`,
+      [vehicleId, user.sub],
+    );
+    if (!access.rowCount) throw new NotFoundException('Vehicle not found or permission denied');
+    const result = await this.pool.query(
+      `INSERT INTO private.darb_mobile_devices (vehicle_id, user_id, status)
+       VALUES ($1, $2, 'active')
+       ON CONFLICT (vehicle_id, user_id) DO UPDATE SET status = 'active'
+       RETURNING id, vehicle_id, status, enrolled_at`,
+      [vehicleId, user.sub],
+    );
+    return { device: result.rows[0], authentication: 'user_jwt' };
+  }
+
+  async listDevices(user: AuthenticatedUser, vehicleId: string) {
+    await this.assertAccess(user.sub, vehicleId);
+    const result = await this.pool.query(
+      `SELECT id, vehicle_id, 'mobile'::text AS device_type, status, enrolled_at AS created_at, last_seen_at
+         FROM private.darb_mobile_devices WHERE vehicle_id = $1
+       UNION ALL
+       SELECT id, vehicle_id, 'gps_tracker'::text AS device_type, status, created_at, last_seen_at
+         FROM private.darb_tracking_devices WHERE vehicle_id = $1
+       ORDER BY created_at DESC`,
+      [vehicleId],
+    );
+    return result.rows;
+  }
+
   async enrollGpsTracker(user: AuthenticatedUser, vehicleId: string, label?: string) {
     const access = await this.pool.query(
       `SELECT 1 FROM vehicles v JOIN vehicle_members vm ON vm.vehicle_id = v.id
@@ -116,14 +148,29 @@ export class TrackingService {
       throw new BadRequestException('GPS timestamp is outside the accepted seven-day window');
     }
     await this.assertAccess(user.sub, dto.vehicleId, true);
+    if (dto.accuracyMeters !== undefined && dto.accuracyMeters > 250) throw new BadRequestException('GPS accuracy is too low');
+    if (dto.deviceId) {
+      const device = await this.pool.query(
+        `SELECT id FROM private.darb_mobile_devices
+          WHERE id = $1 AND vehicle_id = $2 AND user_id = $3 AND status = 'active'`,
+        [dto.deviceId, dto.vehicleId, user.sub],
+      );
+      if (!device.rowCount) throw new ForbiddenException('Mobile device is not enrolled for this user and vehicle');
+    }
     const result = await this.pool.query(
-      `INSERT INTO vehicle_locations (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO public.vehicle_locations (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'mobile')
+       ON CONFLICT (vehicle_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
        RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
-      [dto.vehicleId, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt],
+      [dto.vehicleId, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt, dto.eventId ?? null],
+    );
+    if (!result.rowCount) return { accepted: true, duplicate: true, eventId: dto.eventId };
+    if (dto.deviceId) await this.pool.query(
+      'UPDATE private.darb_mobile_devices SET last_seen_at = now() WHERE id = $1',
+      [dto.deviceId],
     );
     await this.publishIfLatest(result.rows[0]);
-    return { accepted: true, location: result.rows[0] };
+    return { accepted: true, duplicate: false, location: result.rows[0] };
   }
 
   async latest(user: AuthenticatedUser, vehicleId: string) {

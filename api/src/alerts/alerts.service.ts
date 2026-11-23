@@ -110,6 +110,17 @@ export class AlertsService {
     return result.rows[0];
   }
 
+  async markDeviceOnline(deviceId: string) {
+    await this.pool.query(
+      `UPDATE private.darb_alerts
+          SET status = 'resolved'
+        WHERE alert_type = 'device_offline'
+          AND details->>'deviceId' = $1
+          AND status IN ('open', 'acknowledged')`,
+      [deviceId],
+    );
+  }
+
   async evaluateLocation(location: { id: string | number; vehicle_id: string; latitude: number; longitude: number; speed_kmh: number; recorded_at: string | Date }) {
     const rules = await this.pool.query(
       `SELECT r.id, r.organization_id, r.vehicle_id, r.rule_type, r.name, r.config

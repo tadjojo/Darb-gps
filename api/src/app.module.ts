@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { DeviceGatewayModule } from './device-gateway/device-gateway.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -15,6 +16,7 @@ import { TrackingModule } from './tracking/tracking.module';
     HealthModule,
     OrganizationsModule,
     TrackingModule,
+    DeviceGatewayModule,
   ],
 })
 export class AppModule {}

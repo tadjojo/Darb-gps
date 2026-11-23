@@ -21,9 +21,15 @@ export class TrackingController {
     return this.tracking.listDevices(user, vehicleId);
   }
 
-    @Post('devices/gps')
+  @Post('devices/gps')
   enrollGpsTracker(@CurrentUser() user: AuthenticatedUser, @Body() dto: EnrollGpsTrackerDto) {
-    return this.tracking.enrollGpsTracker(user, dto.vehicleId, dto.label);
+    return this.tracking.enrollGpsTracker(user, dto.vehicleId, {
+      label: dto.label,
+      protocol: dto.protocol,
+      imei: dto.imei,
+      model: dto.model,
+      timezoneOffsetMinutes: dto.timezoneOffsetMinutes,
+    });
   }
 
   @Post('devices/gps/:deviceId/revoke')
@@ -42,45 +48,26 @@ export class TrackingController {
   }
 
   @Get('vehicles/:vehicleId/trips')
-  trips(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
-    @Query('limit') limit = '50',
-  ) {
+  trips(@CurrentUser() user: AuthenticatedUser, @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string, @Query('to') to: string, @Query('limit') limit = '50') {
     return this.tracking.getTrips(user, vehicleId, from, to, Number(limit));
   }
 
   @Get('vehicles/:vehicleId/trip-route')
-  tripRoute(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
-  ) {
+  tripRoute(@CurrentUser() user: AuthenticatedUser, @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string, @Query('to') to: string) {
     return this.tracking.getTripRoute(user, vehicleId, from, to);
   }
 
   @Get('vehicles/:vehicleId/stops')
-  stops(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
-    @Query('from') from: string,
-    @Query('to') to: string,
-    @Query('limit') limit = '100',
-  ) {
+  stops(@CurrentUser() user: AuthenticatedUser, @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from: string, @Query('to') to: string, @Query('limit') limit = '100') {
     return this.tracking.getStops(user, vehicleId, from, to, Number(limit));
   }
 
   @Get('vehicles/:vehicleId/history')
-  history(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('limit') limit = '500',
-  ) {
+  history(@CurrentUser() user: AuthenticatedUser, @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('from') from?: string, @Query('to') to?: string, @Query('limit') limit = '500') {
     return this.tracking.history(user, vehicleId, from, to, Number(limit));
   }
 }

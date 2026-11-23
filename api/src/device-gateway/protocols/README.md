@@ -69,3 +69,12 @@ RMC or GGA, validates GGA fix quality (1–8), satellite count (0–99), and a
 present finite altitude. The stream decoder rejects non-ASCII bytes before
 converting buffers to text. This prevents malformed numeric fields such as
 `NaN` or empty altitude values from being normalized into location records.
+
+
+## Device identity and enrollment conflicts
+
+Hardware IMEI/device identifiers are globally unique in the tracking-device
+registry. A second enrollment attempt for an already registered IMEI returns
+HTTP 409 Conflict instead of an unhandled database error. The database unique
+index remains the concurrency-safe source of truth. GT06 timezone normalization
+uses the same -840..+840 minute range enforced by the enrollment DTO and schema.

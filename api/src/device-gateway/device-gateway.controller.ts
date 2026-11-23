@@ -16,6 +16,12 @@ export class DeviceGatewayController {
     return this.tracking.ingestGpsTracker(authorization, dto);
   }
 
+  /** Authenticated hardware heartbeat; refreshes last-seen without inventing a GPS fix. */
+  @Post('heartbeat/gt06')
+  heartbeatGt06(@Headers('authorization') authorization: string | undefined) {
+    return this.tracking.recordGpsTrackerHeartbeat(authorization, 'gt06');
+  }
+
   /** HTTPS adapter for NMEA devices or a trusted relay. */
   @Post('ingest/nmea')
   async ingestNmea(

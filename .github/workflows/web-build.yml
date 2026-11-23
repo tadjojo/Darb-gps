@@ -1,0 +1,33 @@
+name: DARB GPS Web Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "index.html"
+      - "styles.css"
+      - ".github/workflows/web-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "index.html"
+      - "styles.css"
+      - ".github/workflows/web-build.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate JavaScript syntax
+        run: node --check app.js
+      - name: Verify GPS profile controls and API routes exist
+        run: |
+          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const a=fs.readFileSync('app.js','utf8'); for (const id of ['deviceProtocol','deviceImei','deviceModel','deviceTimezone','gpsDeviceRows']) if (!h.includes('id=\"'+id+'\"')) throw new Error('Missing UI control: '+id); for (const route of ['/tracking/devices/gps','/tracking/devices/vehicle/','/device-gateway/ingest/gt06','/device-gateway/ingest/nmea']) if (!a.includes(route) && !h.includes(route)) throw new Error('Missing API route reference: '+route);"

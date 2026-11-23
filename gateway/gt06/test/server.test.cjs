@@ -167,3 +167,60 @@ test('NMEA TCP gateway maps a trusted source IP and forwards RMC with paired GGA
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+function withGatewayEnv(values, callback) {
+  const previous = new Map(Object.keys(values).map(key => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(values)) process.env[key] = value;
+  try {
+    callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test('loadConfig rejects GT06 source CIDRs outside the trusted APN/VPN ranges', () => {
+  withGatewayEnv({
+    DARB_API_BASE_URL: 'https://darb-api.example/api/v1',
+    TRUSTED_DEVICE_CIDRS: '10.20.0.0/16',
+    GT06_DEVICE_MAP_JSON: JSON.stringify({
+      '353419032332707': {
+        bearerToken: 'gt06-test-bearer-token-0123456789',
+        sourceCidrs: ['10.21.1.2/32'],
+      },
+    }),
+    NMEA_DEVICE_MAP_JSON: '{}',
+  }, () => assert.throws(loadConfig, /fully contained within TRUSTED_DEVICE_CIDRS/));
+});
+
+test('loadConfig rejects NMEA source IPs outside the trusted APN/VPN ranges', () => {
+  withGatewayEnv({
+    DARB_API_BASE_URL: 'https://darb-api.example/api/v1',
+    TRUSTED_DEVICE_CIDRS: '10.20.0.0/16',
+    GT06_DEVICE_MAP_JSON: JSON.stringify({
+      '353419032332707': {
+        bearerToken: 'gt06-test-bearer-token-0123456789',
+        sourceCidrs: ['10.20.1.2/32'],
+      },
+    }),
+    NMEA_DEVICE_MAP_JSON: JSON.stringify({
+      '192.0.2.10': { bearerToken: 'nmea-test-bearer-token-0123456789' },
+    }),
+  }, () => assert.throws(loadConfig, /NMEA source IP must be inside TRUSTED_DEVICE_CIDRS/));
+});
+
+test('loadConfig rejects bearer token reuse across enrolled GPS devices', () => {
+  const token = 'shared-test-bearer-token-0123456789';
+  withGatewayEnv({
+    DARB_API_BASE_URL: 'https://darb-api.example/api/v1',
+    TRUSTED_DEVICE_CIDRS: '10.20.0.0/16',
+    GT06_DEVICE_MAP_JSON: JSON.stringify({
+      '353419032332707': { bearerToken: token, sourceCidrs: ['10.20.1.2/32'] },
+    }),
+    NMEA_DEVICE_MAP_JSON: JSON.stringify({
+      '10.20.1.3': { bearerToken: token },
+    }),
+  }, () => assert.throws(loadConfig, /unique bearer token/));
+});

@@ -12,6 +12,12 @@ services:
     ports:
       - "5023:5023/tcp"
       - "5024:5024/tcp"
+    healthcheck:
+      test: ["CMD", "node", "gateway/gt06/healthcheck.js"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid

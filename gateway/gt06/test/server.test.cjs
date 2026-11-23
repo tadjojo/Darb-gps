@@ -226,7 +226,13 @@ test('loadConfig rejects bearer token reuse across enrolled GPS devices', () => 
 });
 
 test('TCP gateway graceful shutdown closes active tracker sockets after the drain window', async () => {
-  const server = net.createServer(() => {});
+  const server = createGateway({
+    apiBase: 'https://darb-api.example/api/v1',
+    devices: new Map(),
+    trustedRanges: [parseCidr('127.0.0.1/32')],
+    maxConnections: 10,
+    idleTimeoutMs: 30000,
+  });
   const accepted = once(server, 'connection');
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const socket = net.createConnection(server.address().port, '127.0.0.1');

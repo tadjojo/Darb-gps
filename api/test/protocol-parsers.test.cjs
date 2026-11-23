@@ -52,6 +52,8 @@ test('GT06 validates CRC and decodes common 0x12 location packet', () => {
   assert.equal(normalized.recordedAt, '2026-02-12T02:30:50.000Z');
   assert.throws(() => normalizeGt06Location({ ...fix, gpsFixed: false }, 180), /valid GPS fix/);
   assert.throws(() => normalizeGt06Location(fix, 9999), /timezone offset/);
+  assert.doesNotThrow(() => normalizeGt06Location(fix, -840));
+  assert.throws(() => normalizeGt06Location(fix, -841), /timezone offset/);
   assert.throws(() => parseGt06Frame(Buffer.from([...frame.slice(0, -4), 0, 0, 0x0d, 0x0a])));
 });
 

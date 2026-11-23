@@ -123,10 +123,10 @@ export class TrackingService {
   }
 
   async recordGpsTrackerHeartbeat(authorization: string | undefined, protocol: 'gt06' | 'nmea') {
-    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) {
+    if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) {
       throw new UnauthorizedException('GPS tracker credential required');
     }
-    const secret = authorization.replace(/^Bearer\\s+/i, '').trim();
+    const secret = authorization.replace(/^Bearer\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');
     const result = await this.pool.query(
       `UPDATE private.darb_tracking_devices

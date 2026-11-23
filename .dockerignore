@@ -1,0 +1,7 @@
+.git
+.env
+.env.*
+!gateway/gt06/deploy/.env.example
+**/node_modules
+**/*.log
+.DS_Store

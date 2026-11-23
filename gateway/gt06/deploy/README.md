@@ -48,8 +48,11 @@ the sample IMEI and bearer token with the actual device profile and one-time
 credential produced by the DARB GPS device enrollment flow.
 
 For more than one device, add each IMEI as another JSON object entry in
-`GT06_DEVICE_MAP_JSON`. Each device must have its own credential. Do not reuse
-a credential across devices.
+`GT06_DEVICE_MAP_JSON`. Every entry must include its own `sourceCidrs` list
+with the carrier egress IP range(s) assigned to that specific SIM/device, in
+addition to its own bearer credential. A broad shared APN CIDR is only the
+outer network boundary; per-device source CIDRs prevent one SIM on the same APN
+from claiming another device IMEI. Do not reuse credentials across devices.
 
 For NMEA, uncomment and configure `NMEA_DEVICE_MAP_JSON` with each device's
 static source IPv4 address and its own enrolled NMEA bearer credential. NMEA

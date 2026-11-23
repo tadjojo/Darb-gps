@@ -5,10 +5,29 @@ import { PG_POOL } from '../database/database.constants';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { IngestLocationDto } from './dto/ingest-location.dto';
 import { TrackerLocationDto } from '../device-gateway/dto/tracker-location.dto';
+import { TrackingGateway } from './tracking.gateway';
 
 @Injectable()
 export class TrackingService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(@Inject(PG_POOL) private readonly pool: Pool, private readonly gateway: TrackingGateway) {}
+
+  private async publishIfLatest(location: any) {
+    const latest = await this.pool.query(
+      'SELECT id FROM public.vehicle_locations WHERE vehicle_id = $1 ORDER BY recorded_at DESC, id DESC LIMIT 1',
+      [location.vehicle_id],
+    );
+    if (latest.rows[0] && String(latest.rows[0].id) === String(location.id)) {
+      this.gateway.publishLocation({
+        vehicleId: location.vehicle_id,
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        speedKmh: Number(location.speed_kmh ?? 0),
+        heading: location.heading === null ? null : Number(location.heading),
+        recordedAt: new Date(location.recorded_at).toISOString(),
+        locationId: location.id,
+      });
+    }
+  }
 
   private async assertAccess(userId: string, vehicleId: string, write = false) {
     const result = await this.pool.query(
@@ -86,6 +105,7 @@ export class TrackingService {
       `UPDATE private.darb_tracking_devices SET last_seen_at = now(), last_protocol = 'json' WHERE id = $1`,
       [row.id],
     );
+    await this.publishIfLatest(inserted.rows[0]);
     return { accepted: true, location: inserted.rows[0] };
   }
 

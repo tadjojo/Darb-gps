@@ -7,5 +7,8 @@ export class IngestLocationDto {
   @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude!: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(500) speedKmh?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(360) heading?: number;
+  @IsOptional() @IsUUID() eventId?: string;
+  @IsOptional() @IsUUID() deviceId?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(250) accuracyMeters?: number;
   @IsDateString() recordedAt!: string;
 }

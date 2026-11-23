@@ -7,12 +7,14 @@ on:
       - "api/**"
       - "gateway/gt06/**"
       - ".github/workflows/api-build.yml"
+      - ".github/workflows/jekyll-gh-pages.yml"
   pull_request:
     branches: [main]
     paths:
       - "api/**"
       - "gateway/gt06/**"
       - ".github/workflows/api-build.yml"
+      - ".github/workflows/jekyll-gh-pages.yml"
 
 jobs:
   build:

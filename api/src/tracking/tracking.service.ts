@@ -187,6 +187,93 @@ export class TrackingService {
     return result.rows[0];
   }
 
+  async getTrips(user: AuthenticatedUser, vehicleId: string, from: string, to: string, limit = 50) {
+    await this.assertAccess(user.sub, vehicleId);
+    const start = Date.parse(from), end = Date.parse(to);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 31 * 86400000) {
+      throw new BadRequestException('Invalid trip date range; maximum range is 31 days');
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new BadRequestException('Trip limit must be 1..100');
+    const result = await this.pool.query(
+      `SELECT id, latitude, longitude, speed_kmh, recorded_at
+         FROM public.vehicle_locations WHERE vehicle_id = $1
+          AND recorded_at >= $2 AND recorded_at <= $3
+        ORDER BY recorded_at ASC LIMIT 10000`,
+      [vehicleId, from, to],
+    );
+    const trips: any[] = [];
+    let points: any[] = [];
+    const distance = (a: any, b: any) => {
+      const rad = (n: number) => n * Math.PI / 180;
+      const dLat = rad(Number(b.latitude) - Number(a.latitude));
+      const dLon = rad(Number(b.longitude) - Number(a.longitude));
+      const x = Math.sin(dLat/2)**2 + Math.cos(rad(Number(a.latitude))) * Math.cos(rad(Number(b.latitude))) * Math.sin(dLon/2)**2;
+      return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+    };
+    const flush = () => {
+      if (points.length < 2) { points = []; return; }
+      let meters = 0;
+      for (let i = 1; i < points.length; i++) meters += distance(points[i-1], points[i]);
+      trips.push({
+        id: String(points[0].id), device_id: 'all',
+        start_at: points[0].recorded_at, end_at: points[points.length-1].recorded_at,
+        distance_meters: Math.round(meters), points_count: points.length,
+      });
+      points = [];
+    };
+    for (const point of result.rows) {
+      if (points.length && Date.parse(point.recorded_at) - Date.parse(points[points.length-1].recorded_at) > 30 * 60_000) flush();
+      points.push(point);
+    }
+    flush();
+    return trips.reverse().slice(0, limit);
+  }
+
+  async getTripRoute(user: AuthenticatedUser, vehicleId: string, from: string, to: string) {
+    await this.assertAccess(user.sub, vehicleId);
+    const start = Date.parse(from), end = Date.parse(to);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 31 * 86400000) throw new BadRequestException('Invalid route date range');
+    const result = await this.pool.query(
+      `SELECT id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at
+         FROM public.vehicle_locations WHERE vehicle_id = $1 AND recorded_at >= $2 AND recorded_at <= $3
+        ORDER BY recorded_at ASC LIMIT 10000`,
+      [vehicleId, from, to],
+    );
+    return result.rows;
+  }
+
+  async getStops(user: AuthenticatedUser, vehicleId: string, from: string, to: string, limit = 100) {
+    await this.assertAccess(user.sub, vehicleId);
+    const start = Date.parse(from), end = Date.parse(to);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || end - start > 31 * 86400000) throw new BadRequestException('Invalid stop date range');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new BadRequestException('Stop limit must be 1..500');
+    const result = await this.pool.query(
+      `SELECT latitude, longitude, speed_kmh, recorded_at
+         FROM public.vehicle_locations WHERE vehicle_id = $1 AND recorded_at >= $2 AND recorded_at <= $3
+        ORDER BY recorded_at ASC LIMIT 10000`,
+      [vehicleId, from, to],
+    );
+    const stops: any[] = [];
+    let points: any[] = [];
+    const flush = () => {
+      if (points.length >= 2) {
+        const duration = (Date.parse(points[points.length-1].recorded_at) - Date.parse(points[0].recorded_at)) / 1000;
+        if (duration >= 300) stops.push({
+          start_at: points[0].recorded_at, duration_seconds: Math.round(duration),
+          points_count: points.length, latitude: Number(points[0].latitude), longitude: Number(points[0].longitude),
+        });
+      }
+      points = [];
+    };
+    for (const point of result.rows) {
+      const stopped = Number(point.speed_kmh ?? 0) <= 3;
+      if (!stopped || (points.length && Date.parse(point.recorded_at) - Date.parse(points[points.length-1].recorded_at) > 10 * 60_000)) flush();
+      if (stopped) points.push(point);
+    }
+    flush();
+    return stops.reverse().slice(0, limit);
+  }
+
   async history(user: AuthenticatedUser, vehicleId: string, from?: string, to?: string, limit = 500) {
     await this.assertAccess(user.sub, vehicleId);
     if (!Number.isInteger(limit) || limit < 1 || limit > 2000) throw new BadRequestException('Limit must be between 1 and 2000');

@@ -18,9 +18,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   app.enableCors({
-    origin: process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(',')
-      : true,
+    origin: (process.env.CORS_ORIGINS ?? 'https://darb-gps-web.onrender.com,https://tadjojo.github.io').split(',').map(value => value.trim()),
     credentials: true,
   });
 

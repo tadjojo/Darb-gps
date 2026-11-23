@@ -9,17 +9,17 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
-    "@nestjs/config": "^3.3.0",
+    "@nestjs/config": "4.0.4",
     "pg": "^8.13.1",
-    "@nestjs/common": "^10.4.15",
-    "@nestjs/core": "^10.4.15",
-    "@nestjs/platform-express": "^10.4.15",
+    "@nestjs/common": "11.2.11",
+    "@nestjs/core": "11.2.11",
+    "@nestjs/platform-express": "11.2.11",
     "class-validator": "^0.14.2",
     "class-transformer": "^0.5.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "@nestjs/websockets": "^10.4.15",
-    "@nestjs/platform-socket.io": "^10.4.15",
+    "@nestjs/websockets": "11.2.11",
+    "@nestjs/platform-socket.io": "11.2.11",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
@@ -30,5 +30,12 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "body-parser": "2.4.0",
+    "file-type": "21.3.4",
+    "lodash": "4.18.1",
+    "multer": "2.5.0",
+    "qs": "6.17.1"
   }
 }

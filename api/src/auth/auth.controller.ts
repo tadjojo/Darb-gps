@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Controller,
   HttpCode,
+  Headers,
   Post,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -14,6 +15,28 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
   ) {}
+
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(@Body() body: { refreshToken: string }) {
+    if (typeof body?.refreshToken !== 'string' || !body.refreshToken.trim()) {
+      throw new BadRequestException('Refresh token is required');
+    }
+    return this.authService.refresh(body.refreshToken);
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  async logout(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { refreshToken: string },
+  ) {
+    if (typeof body?.refreshToken !== 'string' || !body.refreshToken.trim()) {
+      throw new BadRequestException('Refresh token is required');
+    }
+    const accessToken = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : undefined;
+    await this.authService.logout(accessToken, body.refreshToken);
+  }
 
   @Post('login')
   @HttpCode(200)

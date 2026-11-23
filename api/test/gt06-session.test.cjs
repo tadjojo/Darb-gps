@@ -1,9 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseGt06Frame, parseGt06Login, buildGt06Ack } = require('../dist/device-gateway/protocols/gt06.parser');
+const { parseGt06Frame, parseGt06Login, buildGt06Ack, crc16Itt } = require('../dist/device-gateway/protocols/gt06.parser');
 const { handleGt06SessionFrame } = require('../dist/device-gateway/protocols/gt06-session');
 
 const loginHex = '78780D010353419032332707004B7DB80D0A';
+function makeFrame(protocol, payload, serial = 1) {
+  const body = Buffer.concat([Buffer.from([payload.length + 5, protocol]), payload,
+    Buffer.from([(serial >> 8) & 255, serial & 255])]);
+  const crc = crc16Itt(body);
+  return Buffer.concat([Buffer.from([0x78, 0x78]), body,
+    Buffer.from([crc >> 8, crc & 255, 0x0d, 0x0a])]);
+}
 
 test('GT06 login decodes the registered 15-digit IMEI from BCD', () => {
   const frame = parseGt06Frame(Buffer.from(loginHex, 'hex'));
@@ -29,7 +36,7 @@ test('GT06 session authenticates matching IMEI and rejects a mismatch', () => {
 });
 
 test('GT06 session refuses non-login packets before authentication', () => {
-  const frame = parseGt06Frame(Buffer.from('78780813460604098C8B820D0A', 'hex'));
+  const frame = parseGt06Frame(makeFrame(0x13, Buffer.from([0x46, 0x06, 0x04]), 0x8c8b));
   const result = handleGt06SessionFrame(frame, '353419032332707', false);
   assert.equal(result.close, true);
   assert.equal(result.ack, undefined);

@@ -109,8 +109,8 @@ export class TrackingService {
   }
 
   async getGpsTrackerProfile(authorization: string | undefined) {
-    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
-    const secret = authorization.replace(/^Bearer\\s+/i, '').trim();
+    if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
+    const secret = authorization.replace(/^Bearer\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');
     const result = await this.pool.query(
       `SELECT protocol, timezone_offset_minutes, model

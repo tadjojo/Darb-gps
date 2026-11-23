@@ -6,10 +6,11 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { IngestLocationDto } from './dto/ingest-location.dto';
 import { TrackerLocationDto } from '../device-gateway/dto/tracker-location.dto';
 import { TrackingGateway } from './tracking.gateway';
+import { AlertsService } from '../alerts/alerts.service';
 
 @Injectable()
 export class TrackingService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool, private readonly gateway: TrackingGateway) {}
+  constructor(@Inject(PG_POOL) private readonly pool: Pool, private readonly gateway: TrackingGateway, private readonly alerts: AlertsService) {}
 
   private async publishIfLatest(location: any) {
     const latest = await this.pool.query(
@@ -149,6 +150,7 @@ export class TrackingService {
         [row.id],
       );
       await client.query('COMMIT');
+      await this.alerts.evaluateLocation(inserted.rows[0]).catch((error) => console.error('GPS tracker alert evaluation failed', error));
       await this.publishIfLatest(inserted.rows[0]);
       return { accepted: true, duplicate: false, location: inserted.rows[0] };
     } catch (error) {
@@ -206,6 +208,7 @@ export class TrackingService {
         [dto.deviceId],
       );
       await client.query('COMMIT');
+      await this.alerts.evaluateLocation(result.rows[0]).catch((error) => console.error('Mobile tracking alert evaluation failed', error));
       await this.publishIfLatest(result.rows[0]);
       return { accepted: true, duplicate: false, location: result.rows[0] };
     } catch (error) {

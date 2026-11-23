@@ -96,6 +96,12 @@ docker compose down
 - The gateway configuration currently loads the device credential maps at
   startup. Restart the service after enrolling, revoking, or rotating a device
   credential.
+- On SIGTERM/SIGINT the gateway stops accepting new connections, allows a
+  five-second drain window, then closes remaining tracker sockets so container
+  shutdown cannot hang indefinitely.
+- At startup, GT06 per-device CIDRs must be fully contained in the trusted
+  APN/VPN ranges, NMEA static source IPs must be inside those ranges, and each
+  enrolled device must have a unique bearer token.
 - GT06 timezone offset must be set correctly in the device profile before
   location ingestion.
 - NMEA GGA records are forwarded only when paired with a matching RMC time

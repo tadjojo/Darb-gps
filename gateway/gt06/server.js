@@ -206,6 +206,14 @@ function createGateway(config, fetchImpl = fetch) {
       });
     });
   });
+  const activeSockets = new Set();
+  server.on('connection', socket => {
+    activeSockets.add(socket);
+    socket.once('close', () => activeSockets.delete(socket));
+  });
+  server.closeClients = () => {
+    for (const socket of activeSockets) socket.destroy();
+  };
 
   return server;
 }
@@ -286,7 +294,38 @@ function createNmeaGateway(config, fetchImpl = fetch) {
       });
     });
   });
+  const activeSockets = new Set();
+  server.on('connection', socket => {
+    activeSockets.add(socket);
+    socket.once('close', () => activeSockets.delete(socket));
+  });
+  server.closeClients = () => {
+    for (const socket of activeSockets) socket.destroy();
+  };
   return server;
+}
+
+function shutdownServers(servers, graceMs = 5000) {
+  return new Promise(resolve => {
+    let remaining = servers.length;
+    if (remaining === 0) return resolve();
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(forceClose);
+      resolve();
+    };
+    const forceClose = setTimeout(() => {
+      for (const server of servers) server.closeClients?.();
+    }, graceMs);
+    for (const server of servers) {
+      server.close(() => {
+        remaining -= 1;
+        if (remaining === 0) finish();
+      });
+    }
+  });
 }
 
 if (require.main === module) {
@@ -309,10 +348,14 @@ if (require.main === module) {
       process.stdout.write('[nmea-gateway] listening on TCP port ' + config.nmeaPort + '; mapped source IPs: ' + config.nmeaDevices.size + '\n');
     });
   }
-  const shutdown = () => Promise.all(servers.map(item => new Promise(resolve => item.close(resolve))))
-    .then(() => process.exit(0));
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    shutdownServers(servers).then(() => process.exit(0));
+  };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
 }
 
-module.exports = { createGateway, createNmeaGateway, isTrustedAddress, isCidrContained, parseCidr, loadConfig };
+module.exports = { createGateway, createNmeaGateway, shutdownServers, isTrustedAddress, isCidrContained, parseCidr, loadConfig };

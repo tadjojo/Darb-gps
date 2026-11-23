@@ -88,7 +88,9 @@ static and uniquely mapped to one enrolled NMEA device inside the trusted APN/VP
 
 The bearer token is held only by the gateway and is never sent to the tracker.
 Unknown IMEIs, untrusted source addresses, packets before login, API failures,
-and malformed frames close the TCP session.
+and malformed frames close the TCP session. At startup, every per-device GT06
+CIDR must be fully contained by the trusted APN/VPN ranges, every NMEA source IP
+must be inside those ranges, and bearer tokens must be unique across all devices.
 
 ## Deployment boundary
 

@@ -25,7 +25,7 @@ interface LocationEvent {
   transports: ['websocket'],
   cors: {
     origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
-      const allowed = (process.env.CORS_ORIGINS ?? '').split(',').map(value => value.trim()).filter(Boolean);
+      const allowed = (process.env.CORS_ORIGINS ?? 'https://darb-gps-web.onrender.com,https://tadjojo.github.io').split(',').map(value => value.trim()).filter(Boolean);
       callback(null, !origin || allowed.includes(origin));
     },
     credentials: false,

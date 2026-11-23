@@ -11,7 +11,17 @@ import { TrackingService } from './tracking.service';
 export class TrackingController {
   constructor(private readonly tracking: TrackingService) {}
 
-  @Post('devices/gps')
+  @Post('devices/enroll-mobile')
+  enrollMobile(@CurrentUser() user: AuthenticatedUser, @Body() body: { vehicleId: string }) {
+    return this.tracking.enrollMobileDevice(user, body.vehicleId);
+  }
+
+  @Get('devices/vehicle/:vehicleId')
+  listDevices(@CurrentUser() user: AuthenticatedUser, @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string) {
+    return this.tracking.listDevices(user, vehicleId);
+  }
+
+    @Post('devices/gps')
   enrollGpsTracker(@CurrentUser() user: AuthenticatedUser, @Body() dto: EnrollGpsTrackerDto) {
     return this.tracking.enrollGpsTracker(user, dto.vehicleId, dto.label);
   }

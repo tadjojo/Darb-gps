@@ -87,7 +87,7 @@ test('GT06 TCP gateway logs in, forwards heartbeat/location, and ACKs only accep
 function makeNmea(body) {
   let checksum = 0;
   for (const character of body) checksum ^= character.charCodeAt(0);
-  return '
+  return '$' + body + '*' + checksum.toString(16).padStart(2, '0').toUpperCase() + String.fromCharCode(13, 10);
 }
 
 test('NMEA TCP gateway maps a trusted source IP and forwards RMC with paired GGA', async () => {

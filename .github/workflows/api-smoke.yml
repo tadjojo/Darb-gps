@@ -1,0 +1,33 @@
+name: DARB GPS Production API Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/api-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API liveness
+        run: |
+          response="$(curl --retry 5 --retry-delay 5 --retry-all-errors --max-time 30 -fsS https://darb-gps-x.onrender.com/api/v1/health/live)"
+          echo "$response"
+          node -e 'const x=JSON.parse(process.argv[1]); if(x.status!=="ok") process.exit(1)' "$response"
+      - name: Check database readiness
+        run: |
+          response="$(curl --retry 5 --retry-delay 5 --retry-all-errors --max-time 30 -fsS https://darb-gps-x.onrender.com/api/v1/health/ready)"
+          echo "$response"
+          node -e 'const x=JSON.parse(process.argv[1]); if(x.status!=="ready" || x.database!=="connected") process.exit(1)' "$response"
+      - name: Check web-origin CORS preflight
+        run: |
+          headers="$(mktemp)"
+          status="$(curl --max-time 30 -sS -o /dev/null -D "$headers" -w '%{http_code}' -X OPTIONS https://darb-gps-x.onrender.com/api/v1/auth/login -H 'Origin: https://darb-gps-web.onrender.com' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type')"
+          cat "$headers"
+          test "$status" = "204" || test "$status" = "200"
+          grep -i '^access-control-allow-origin: https://darb-gps-web.onrender.com' "$headers"

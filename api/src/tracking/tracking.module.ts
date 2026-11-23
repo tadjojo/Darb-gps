@@ -6,5 +6,6 @@ import { TrackingService } from './tracking.service';
 @Module({
   controllers: [TrackingController],
   providers: [TrackingService, JwtAuthGuard],
+  exports: [TrackingService],
 })
 export class TrackingModule {}

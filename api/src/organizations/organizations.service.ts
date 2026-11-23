@@ -134,7 +134,7 @@ export class OrganizationsService {
     }
 
     const result = await this.pool.query(
-      `SELECT id, display_name, registration_number,
+      `SELECT id, display_name, registration_number, driver_name,
        status, created_at
        FROM vehicles
        WHERE organization_id = $1

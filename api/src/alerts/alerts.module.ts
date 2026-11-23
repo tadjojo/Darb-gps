@@ -6,5 +6,6 @@ import { AlertsService } from './alerts.service';
 @Module({
   controllers: [AlertsController],
   providers: [AlertsService, JwtAuthGuard],
+  exports: [AlertsService],
 })
 export class AlertsModule {}

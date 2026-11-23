@@ -19,7 +19,7 @@ export function handleGt06SessionFrame(
   if (frame.protocol === 0x01) {
     const login = parseGt06Login(frame);
     if (login.imei !== expectedImei) return { authenticated: false, close: true };
-    return { authenticated: true, close: false, imei: login.imei, ack: buildGt06Ack(frame.protocol, frame.serial) };
+    return { authenticated: true, close: false, imei: login.imei, ack: buildGt06Ack(frame.protocol, frame.serial, frame.extended) };
   }
   if (!authenticated) return { authenticated: false, close: true };
   if (frame.protocol === 0x13) {

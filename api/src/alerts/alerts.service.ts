@@ -110,6 +110,24 @@ export class AlertsService {
     return result.rows[0];
   }
 
+
+  async createTamperAlert(vehicleId: string, deviceId: string, recordedAt: string, eventId?: string) {
+    await this.pool.query(
+      `INSERT INTO private.darb_alerts
+        (organization_id, vehicle_id, alert_type, severity, title, message, details, event_key, occurred_at)
+       SELECT v.organization_id, v.id, 'tamper', 'critical',
+              'اشتباه بوجود عبث بجهاز التتبع',
+              'أرسل جهاز GPS إشارة استشعار عبث. يلزم فحص المركبة والجهاز.',
+              jsonb_build_object('deviceId', $2, 'deviceType', 'gps_tracker', 'eventId', $4),
+              'tamper:' || $2 || ':' || coalesce($4, $3),
+              $3::timestamptz
+         FROM public.vehicles v
+        WHERE v.id = $1 AND v.status = 'active'
+       ON CONFLICT (event_key) DO NOTHING`,
+      [vehicleId, deviceId, recordedAt, eventId || null],
+    );
+  }
+
   async markDeviceOnline(deviceId: string) {
     await this.pool.query(
       `UPDATE private.darb_alerts

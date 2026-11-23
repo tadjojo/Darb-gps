@@ -110,35 +110,53 @@ export class TrackingService {
   }
 
   async ingestGpsTracker(authorization: string | undefined, dto: TrackerLocationDto) {
-    if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
-    const secret = authorization.replace(/^Bearer\s+/i, '').trim();
+    if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) throw new UnauthorizedException('GPS tracker credential required');
+    const secret = authorization.replace(/^Bearer\\s+/i, '').trim();
     const hash = createHash('sha256').update(secret).digest('hex');
     const recorded = Date.parse(dto.recordedAt);
     const now = Date.now();
     if (!Number.isFinite(recorded) || recorded > now + 5 * 60_000 || recorded < now - 7 * 24 * 60 * 60_000) {
       throw new BadRequestException('GPS timestamp is outside the accepted seven-day window');
     }
-    const device = await this.pool.query(
-      `SELECT id, vehicle_id FROM private.darb_tracking_devices
-        WHERE credential_hash = $1 AND status = 'active'`,
-      [hash],
-    );
-    if (!device.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid or revoked');
-    const row = device.rows[0];
-    const inserted = await this.pool.query(
-      `INSERT INTO public.vehicle_locations (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at)
-       SELECT $1, $2, $3, $4, $5, $6
-        WHERE EXISTS (SELECT 1 FROM public.vehicles WHERE id = $1 AND status = 'active')
-       RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
-      [row.vehicle_id, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt],
-    );
-    if (!inserted.rowCount) throw new NotFoundException('Assigned vehicle is not active');
-    await this.pool.query(
-      `UPDATE private.darb_tracking_devices SET last_seen_at = now(), last_protocol = 'json' WHERE id = $1`,
-      [row.id],
-    );
-    await this.publishIfLatest(inserted.rows[0]);
-    return { accepted: true, location: inserted.rows[0] };
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const device = await client.query(
+        `SELECT id, vehicle_id FROM private.darb_tracking_devices
+          WHERE credential_hash = $1 AND status = 'active'
+          FOR SHARE`,
+        [hash],
+      );
+      if (!device.rowCount) throw new UnauthorizedException('GPS tracker credential is invalid or revoked');
+      const row = device.rows[0];
+      const inserted = await client.query(
+        `INSERT INTO public.vehicle_locations
+          (vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, event_id, source)
+         SELECT $1, $2, $3, $4, $5, $6, $7, 'gps_tracker'
+          WHERE EXISTS (SELECT 1 FROM public.vehicles WHERE id = $1 AND status = 'active')
+         ON CONFLICT (vehicle_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
+         RETURNING id, vehicle_id, latitude, longitude, speed_kmh, heading, recorded_at, received_at`,
+        [row.vehicle_id, dto.latitude, dto.longitude, dto.speedKmh ?? 0, dto.heading ?? null, dto.recordedAt, dto.eventId ?? null],
+      );
+      if (!inserted.rowCount) {
+        await client.query('COMMIT');
+        return { accepted: true, duplicate: true, eventId: dto.eventId };
+      }
+      await client.query(
+        `UPDATE private.darb_tracking_devices
+            SET last_seen_at = now(), last_protocol = 'json'
+          WHERE id = $1`,
+        [row.id],
+      );
+      await client.query('COMMIT');
+      await this.publishIfLatest(inserted.rows[0]);
+      return { accepted: true, duplicate: false, location: inserted.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async ingest(user: AuthenticatedUser, dto: IngestLocationDto) {

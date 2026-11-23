@@ -60,3 +60,12 @@ The session helper is therefore not a complete public authentication boundary.
 Before exposing a raw TCP listener, deploy it behind a trusted APN/VPN or
 device-source network controls, or add a verified model-specific device
 authentication mechanism. Do not treat IMEI-only login as strong authentication.
+
+
+## Device identity and enrollment conflicts
+
+Hardware IMEI/device identifiers are globally unique in the tracking-device
+registry. A second enrollment attempt for an already registered IMEI returns
+HTTP 409 Conflict instead of an unhandled database error. The database unique
+index remains the concurrency-safe source of truth. GT06 timezone normalization
+uses the same -840..+840 minute range enforced by the enrollment DTO and schema.

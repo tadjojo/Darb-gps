@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const net = require('node:net');
 const { once } = require('node:events');
-const { isTrustedAddress, isCidrContained, parseCidr, loadConfig, createGateway, createNmeaGateway } = require('../server');
+const { isTrustedAddress, isCidrContained, parseCidr, loadConfig, createGateway, createNmeaGateway, shutdownServers } = require('../server');
 const { crc16Itt, buildGt06Ack } = require('../../../api/dist/device-gateway/protocols/gt06.parser');
 
 test('GT06 gateway validates IPv4 CIDR ranges', () => {
@@ -223,4 +223,18 @@ test('loadConfig rejects bearer token reuse across enrolled GPS devices', () => 
       '10.20.1.3': { bearerToken: token },
     }),
   }, () => assert.throws(loadConfig, /unique bearer token/));
+});
+
+test('TCP gateway graceful shutdown closes active tracker sockets after the drain window', async () => {
+  const server = net.createServer(() => {});
+  const accepted = once(server, 'connection');
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const socket = net.createConnection(server.address().port, '127.0.0.1');
+  await once(socket, 'connect');
+  await accepted;
+  const closed = once(socket, 'close');
+  const shutdown = shutdownServers([server], 20);
+  await closed;
+  await shutdown;
+  assert.equal(server.listening, false);
 });

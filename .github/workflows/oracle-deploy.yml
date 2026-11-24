@@ -131,11 +131,7 @@ jobs:
 
           remote_dir=$(printf '%q' "$OCI_DEPLOY_DIR")
           remote_tag=$(printf '%q' "$IMAGE_TAG")
-          remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml pull api caddy && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml up -d api caddy"
-
-          if [[ -f "$OCI_DEPLOY_DIR/.env.gateway" ]]; then
-            remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway pull && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway up -d --remove-orphans"
-          fi
+          remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml pull api caddy && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml up -d api caddy && if [ -f .env.gateway ]; then DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway pull gps-gateway && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway up -d gps-gateway; fi"
 
           ssh -i "$HOME/.ssh/darb_oci" \\
             -o BatchMode=yes \\

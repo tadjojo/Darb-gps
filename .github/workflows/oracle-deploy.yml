@@ -1,0 +1,97 @@
+name: DARB GPS OCI Free VM Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "gateway/gt06/**"
+      - "deploy/oracle/**"
+      - ".github/workflows/oracle-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: darb-gps-oci-deploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image (ARM64 and AMD64)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          platforms: linux/arm64,linux/amd64
+          push: true
+          tags: |
+            ghcr.io/tadjojo/darb-gps-api:${{ github.sha }}
+            ghcr.io/tadjojo/darb-gps-api:main
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and publish GPS gateway image (ARM64 and AMD64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./gateway/gt06/Dockerfile
+          platforms: linux/arm64,linux/amd64
+          push: true
+          tags: |
+            ghcr.io/tadjojo/darb-gps-gateway:${{ github.sha }}
+            ghcr.io/tadjojo/darb-gps-gateway:main
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
+
+      - name: Deploy exact images to Oracle VM when SSH settings are configured
+        env:
+          OCI_SSH_HOST: ${{ secrets.OCI_SSH_HOST }}
+          OCI_SSH_USER: ${{ secrets.OCI_SSH_USER }}
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          OCI_SSH_KNOWN_HOSTS: ${{ secrets.OCI_SSH_KNOWN_HOSTS }}
+          OCI_DEPLOY_DIR: ${{ secrets.OCI_DEPLOY_DIR }}
+          IMAGE_TAG: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$OCI_SSH_HOST" || -z "$OCI_SSH_USER" || -z "$OCI_SSH_PRIVATE_KEY" || -z "$OCI_SSH_KNOWN_HOSTS" || -z "$OCI_DEPLOY_DIR" ]]; then
+            echo "::notice::OCI image publishing succeeded; remote deployment skipped because OCI SSH repository secrets are not configured."
+            exit 0
+          fi
+
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > "$HOME/.ssh/darb_oci"
+          chmod 600 "$HOME/.ssh/darb_oci"
+          printf '%s\n' "$OCI_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          remote_dir=$(printf '%q' "$OCI_DEPLOY_DIR")
+          remote_tag=$(printf '%q' "$IMAGE_TAG")
+          remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml pull && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml up -d --remove-orphans"
+
+          ssh -i "$HOME/.ssh/darb_oci" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$OCI_SSH_USER@$OCI_SSH_HOST" "$remote_command"

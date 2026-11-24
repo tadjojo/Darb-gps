@@ -11,7 +11,9 @@ export interface NmeaFix {
 }
 
 function parseCoordinate(value: string, hemisphere: string, degreeDigits: number, max: number): number {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) throw new Error('Invalid NMEA coordinate');
+  if (!/^\d+(?:\.\d+)?$/.test(value) || value.split('.')[0].length !== degreeDigits + 2) {
+    throw new Error('Invalid NMEA coordinate');
+  }
   const degrees = Number(value.slice(0, degreeDigits));
   const minutes = Number(value.slice(degreeDigits));
   if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 60 || degrees > max || (degrees === max && minutes !== 0)) {

@@ -95,10 +95,13 @@ correct CA certificate from the Supabase project dashboard and place it at:
 /opt/darb-gps/deploy/oracle/secrets/prod-supabase.cer
 ```
 
-Restrict the file:
+The CA certificate is public trust material, not a password. Keep the
+environment file private and set the certificate readable by the non-root
+container user:
+
 ```sh
 chmod 600 .env
-chmod 600 secrets/prod-supabase.cer
+chmod 644 secrets/prod-supabase.cer
 ```
 
 Do not start the API until the real connection string, publishable key, and
@@ -107,10 +110,10 @@ running service.
 
 ## 5. Publish the container images
 
-The GitHub Actions workflow `.github/workflows/oracle-deploy.yml` builds
-multi-architecture API and gateway images and publishes them to GitHub
-Container Registry (GHCR). The workflow uses GitHub Actions; it does not use
-Render build minutes.
+The GitHub Actions workflow `.github/workflows/oracle-deploy.yml` validates
+the deployment files, runs the GPS protocol and gateway tests, builds both
+images for ARM64 and AMD64, and publishes them to GitHub Container Registry
+(GHCR). The workflow uses GitHub Actions; it does not use Render build minutes.
 
 After the first successful publish, open the two packages under the GitHub
 account's Packages page and set their visibility to Public if you want the VM
@@ -149,8 +152,7 @@ The gateway is deliberately disabled by default. Do not expose its ports with
 placeholder values.
 
 After enrolling a real GT06 device in DARB and obtaining its one-time
-credential, copy ` .env.gateway.example ` to `.env.gateway` (without the
-leading space in the filename), then set:
+credential, copy `.env.gateway.example` to `.env.gateway`, then set:
 - the new HTTPS API base URL
 - the actual carrier APN/VPN egress CIDR(s)
 - the actual 15-digit IMEI, its one-time bearer credential, and its assigned
@@ -188,9 +190,10 @@ Actions → New repository secret. Never commit them. Do not use a password
 login or expose the SSH private key in workflow output.
 
 After adding the secrets, the next successful main-branch image build will
-pull the exact commit-tagged images on the VM and restart the services. The
-workflow does not create an Oracle account, VM, DNS record, TLS domain,
-Supabase credentials, carrier APN, or tracker enrollment.
+pull the exact commit-tagged images on the VM and restart the API and Caddy.
+If `.env.gateway` exists on the VM, the workflow also deploys the gateway
+profile. The workflow does not create an Oracle account, VM, DNS record, TLS
+domain, Supabase credentials, carrier APN, or tracker enrollment.
 
 ## 9. Operations and limitations
 

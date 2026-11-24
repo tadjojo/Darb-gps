@@ -116,9 +116,49 @@ images for ARM64 and AMD64, and publishes them to GitHub Container Registry
 (GHCR). The workflow uses GitHub Actions; it does not use Render build minutes.
 
 After the first successful publish, open the two packages under the GitHub
-account's Packages page and set their visibility to Public if you want the VM
-to pull without a registry token. Otherwise configure a read-only GHCR token
-on the VM; do not put it in the repository.
+account's Packages page and set their visibility to Public if you want Render
+and the Oracle VM to pull without registry credentials. Otherwise configure
+a read-only GHCR token in the relevant provider's secret manager; do not put
+it in the repository.
+
+### Optional Render workaround: deploy the prebuilt image
+
+The current Render service is Git-backed and tries to build the Dockerfile on
+Render. Render also supports image-backed services that pull a prebuilt image
+from GHCR. This moves compilation to GitHub Actions and avoids rebuilding the
+same Dockerfile on Render. The image-backed service must be created separately;
+do not delete the current working service until the replacement passes its
+health checks.
+
+1. After GHCR images have been published, set the API package visibility to
+   Public (or configure a GHCR read-only registry credential in Render).
+2. In Render Dashboard choose **New → Web Service → Existing Image**.
+3. Set the image to
+   `ghcr.io/tadjojo/darb-gps-api:main`, choose the Free plan, and keep the
+   region close to your users.
+4. Copy the current API service's runtime environment variables into the new
+   service: `DATABASE_URL`, `SUPABASE_URL`,
+   `SUPABASE_PUBLISHABLE_KEY`, and `CORS_ORIGINS`. Also add the existing
+   Supabase CA certificate as a Secret File at
+   `/etc/secrets/prod-supabase.cer`. Do not paste secrets into GitHub or chat.
+5. Set the health check path to `/api/v1/health/live`. Confirm
+   `/api/v1/health/ready` reports the database as connected.
+6. In the new image-backed service's Settings page, copy its Deploy Hook URL
+   and save it as the GitHub repository secret
+   `RENDER_IMAGE_DEPLOY_HOOK`.
+
+After the secret is configured, successful main-branch image builds trigger
+the Render deploy hook with the immutable commit-tagged GHCR image. Image-backed
+services do not automatically follow Git commits; this workflow supplies the
+deployment trigger. A configured Render pre-deploy command still consumes
+pipeline minutes, so leave that command empty unless it is genuinely required.
+
+Only after the new API endpoint passes authentication, database readiness,
+CORS, and mobile-client tests should you switch clients and suspend or remove
+the old Git-backed service. The current Render free instance and the
+replacement share the workspace's free instance-hour allowance during the
+overlap. If Render still rejects an image-backed deploy due to workspace
+pipeline quota, use the Oracle VM route below instead.
 
 ## 6. Start the HTTPS API
 

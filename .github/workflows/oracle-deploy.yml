@@ -107,6 +107,22 @@ jobs:
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
 
+      - name: Trigger Render image-backed API when deploy hook is configured
+        env:
+          RENDER_IMAGE_DEPLOY_HOOK: ${{ secrets.RENDER_IMAGE_DEPLOY_HOOK }}
+          IMAGE_TAG: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$RENDER_IMAGE_DEPLOY_HOOK" ]]; then
+            echo "::notice::Render image deployment skipped; configure RENDER_IMAGE_DEPLOY_HOOK after creating an image-backed Render API service."
+            exit 0
+          fi
+          image="ghcr.io/tadjojo/darb-gps-api:$IMAGE_TAG"
+          curl --fail --silent --show-error --get \
+            --data-urlencode "imgURL=$image" \
+            "$RENDER_IMAGE_DEPLOY_HOOK"
+
       - name: Deploy exact images to Oracle VM when SSH settings are configured
         env:
           OCI_SSH_HOST: ${{ secrets.OCI_SSH_HOST }}

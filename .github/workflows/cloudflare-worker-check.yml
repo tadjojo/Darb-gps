@@ -1,0 +1,35 @@
+name: DARB Cloudflare Worker Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/api-worker/**"
+      - ".github/workflows/cloudflare-worker-check.yml"
+  pull_request:
+    paths:
+      - "cloudflare/api-worker/**"
+      - ".github/workflows/cloudflare-worker-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare/api-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/api-worker/package.json
+      - name: Install dependencies
+        run: npm install
+      - name: Run Worker tests
+        run: npm test
+      - name: Validate Wrangler bundle
+        run: npx wrangler deploy --dry-run

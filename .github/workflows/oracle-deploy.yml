@@ -1,6 +1,12 @@
 name: DARB GPS OCI Free VM Deploy
 
 on:
+  pull_request:
+    paths:
+      - "api/**"
+      - "gateway/gt06/**"
+      - "deploy/oracle/**"
+      - ".github/workflows/oracle-deploy.yml"
   push:
     branches: [main]
     paths:
@@ -19,7 +25,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install API dependencies and run protocol tests
+        working-directory: api
+        run: |
+          npm install
+          npm run test:protocols
+
+      - name: Test GT06 gateway and health check
+        run: |
+          node --test gateway/gt06/test/server.test.cjs
+          node --test gateway/gt06/test/healthcheck.test.cjs
+
+      - name: Validate Oracle Compose configuration
+        run: |
+          cp deploy/oracle/.env.example deploy/oracle/.env
+          cp deploy/oracle/.env.gateway.example deploy/oracle/.env.gateway
+          mkdir -p deploy/oracle/secrets
+          touch deploy/oracle/secrets/prod-supabase.cer
+          docker compose --env-file deploy/oracle/.env -f deploy/oracle/compose.yml config --quiet
+
+      - name: Build API and gateway Docker images
+        run: |
+          docker build -f api/Dockerfile -t darb-gps-api:ci ./api
+          docker build -f gateway/gt06/Dockerfile -t darb-gps-gateway:ci .
+
   publish:
+    if: github.event_name != 'pull_request'
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -81,17 +124,21 @@ jobs:
           fi
 
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > "$HOME/.ssh/darb_oci"
+          printf '%s\\n' "$OCI_SSH_PRIVATE_KEY" > "$HOME/.ssh/darb_oci"
           chmod 600 "$HOME/.ssh/darb_oci"
-          printf '%s\n' "$OCI_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\\n' "$OCI_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
           remote_dir=$(printf '%q' "$OCI_DEPLOY_DIR")
           remote_tag=$(printf '%q' "$IMAGE_TAG")
-          remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml pull && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml up -d --remove-orphans"
+          remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml pull api caddy && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml up -d api caddy"
 
-          ssh -i "$HOME/.ssh/darb_oci" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
+          if [[ -f "$OCI_DEPLOY_DIR/.env.gateway" ]]; then
+            remote_command="cd $remote_dir && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway pull && DARB_IMAGE_TAG=$remote_tag docker compose -f compose.yml --profile gps-gateway up -d --remove-orphans"
+          fi
+
+          ssh -i "$HOME/.ssh/darb_oci" \\
+            -o BatchMode=yes \\
+            -o IdentitiesOnly=yes \\
+            -o StrictHostKeyChecking=yes \\
             "$OCI_SSH_USER@$OCI_SSH_HOST" "$remote_command"

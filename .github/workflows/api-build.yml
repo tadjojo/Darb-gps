@@ -10,6 +10,8 @@ on:
       - "test-tracker-simulator.mjs"
       - "package.json"
       - "gateway/gt06/**"
+      - "deploy/oracle/**"
+      - ".github/workflows/oracle-deploy.yml"
       - ".github/workflows/api-build.yml"
       - ".github/workflows/static.yml"
   pull_request:
@@ -17,6 +19,8 @@ on:
     paths:
       - "api/**"
       - "gateway/gt06/**"
+      - "deploy/oracle/**"
+      - ".github/workflows/oracle-deploy.yml"
       - ".github/workflows/api-build.yml"
       - ".github/workflows/static.yml"
 
@@ -57,6 +61,14 @@ jobs:
         run: |
           cp gateway/gt06/deploy/.env.example gateway/gt06/deploy/.env
           docker compose -f gateway/gt06/deploy/docker-compose.yml config --quiet
+
+      - name: Validate Oracle Cloud Compose configuration
+        run: |
+          cp deploy/oracle/.env.example deploy/oracle/.env
+          cp deploy/oracle/.env.gateway.example deploy/oracle/.env.gateway
+          mkdir -p deploy/oracle/secrets
+          touch deploy/oracle/secrets/prod-supabase.cer
+          docker compose --env-file deploy/oracle/.env -f deploy/oracle/compose.yml config --quiet
 
       - name: Build TCP gateway container image
         run: docker build -f gateway/gt06/Dockerfile -t darb-gps-tcp-gateway:ci .

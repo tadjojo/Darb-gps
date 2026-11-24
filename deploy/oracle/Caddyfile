@@ -1,0 +1,8 @@
+{
+  email {$ACME_EMAIL}
+}
+
+{$DARB_DOMAIN} {
+  encode gzip zstd
+  reverse_proxy api:3000
+}

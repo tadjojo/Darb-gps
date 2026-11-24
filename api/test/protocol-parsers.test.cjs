@@ -20,6 +20,18 @@ test('NMEA RMC validates checksum and converts knots to km/h', () => {
   assert.equal(normalizeNmeaFix(fix).recordedAt, fix.recordedAt);
 });
 
+
+test('NMEA rejects coordinates with missing degree or minute digits', () => {
+  assert.throws(
+    () => parseNmeaSentence(nmea('GPRMC,123519,A,1.2,N,01131.000,E,0.0,0.0,230394,,,A')),
+    /Invalid NMEA coordinate/,
+  );
+  assert.throws(
+    () => parseNmeaSentence(nmea('GPRMC,123519,A,4807.038,N,1.2,E,0.0,0.0,230394,,,A')),
+    /Invalid NMEA coordinate/,
+  );
+});
+
 test('NMEA GGA requires a trusted paired UTC timestamp', () => {
   const fix = parseNmeaSentence(nmea('GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,'));
   assert.equal(fix.satellites, 8);

@@ -1,0 +1,93 @@
+services:
+  api:
+    image: ghcr.io/tadjojo/darb-gps-api:${DARB_IMAGE_TAG:-main}
+    container_name: darb-gps-api
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in deploy/oracle/.env}
+      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL in deploy/oracle/.env}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?Set SUPABASE_PUBLISHABLE_KEY in deploy/oracle/.env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://tadjojo.github.io/Darb-gps,https://darb-gps-web.onrender.com}
+    volumes:
+      - ./secrets/prod-supabase.cer:/etc/secrets/prod-supabase.cer:ro
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: darb-gps-https
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DARB_DOMAIN: ${DARB_DOMAIN:?Set DARB_DOMAIN to a DNS name pointing to this VM}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for TLS certificate notices}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+
+  gps-gateway:
+    image: ghcr.io/tadjojo/darb-gps-gateway:${DARB_IMAGE_TAG:-main}
+    container_name: darb-gps-tcp-gateway
+    restart: unless-stopped
+    profiles:
+      - gps-gateway
+    init: true
+    env_file:
+      - .env.gateway
+    ports:
+      - "5023:5023/tcp"
+      - "5024:5024/tcp"
+    healthcheck:
+      test: ["CMD", "node", "gateway/gt06/healthcheck.js"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+
+volumes:
+  caddy_data:
+  caddy_config:

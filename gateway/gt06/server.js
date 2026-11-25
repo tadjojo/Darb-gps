@@ -42,7 +42,7 @@ function isTrustedAddress(address, ranges) {
 }
 
 function loadConfig() {
-  const apiBase = new URL(process.env.DARB_API_BASE_URL || 'https://darb-gps-x.onrender.com/api/v1');
+  const apiBase = new URL(process.env.DARB_API_BASE_URL || 'https://darb-gps-new.tadjojo.workers.dev/api/v1');
   if (apiBase.protocol !== 'https:' && process.env.ALLOW_INSECURE_API !== 'true') {
     throw new Error('DARB_API_BASE_URL must use HTTPS');
   }

@@ -30,6 +30,70 @@ function json(data, status, headers) {
 }
 
 
+
+function parseNmeaSentence(sentence) {
+  const match = /^\\$([^*]+)\\*([0-9A-Fa-f]{2})$/.exec(sentence.trim());
+  if (!match) throw new Error("NMEA sentence must include checksum");
+  let checksum = 0; for (const ch of match[1]) checksum ^= ch.charCodeAt(0);
+  if (checksum !== Number.parseInt(match[2], 16)) throw new Error("NMEA checksum mismatch");
+  const fields = match[1].split(",");
+  if (!/^[A-Z]{2}(RMC|GGA)$/i.test(fields[0])) throw new Error("Unsupported NMEA sentence type");
+  const type = fields[0].slice(-3).toUpperCase();
+  const coordinate = (value, hemisphere, degreeDigits, max) => {
+    if (!/^[0-9]+(?:\\.[0-9]+)?$/.test(value) || value.split(".")[0].length !== degreeDigits + 2) throw new Error("Invalid NMEA coordinate");
+    const degrees = Number(value.slice(0, degreeDigits)), minutes = Number(value.slice(degreeDigits));
+    if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 60 || degrees > max || (degrees === max && minutes !== 0)) throw new Error("NMEA coordinate out of range");
+    const positive = degreeDigits === 2 ? "N" : "E", negative = degreeDigits === 2 ? "S" : "W";
+    if (hemisphere !== positive && hemisphere !== negative) throw new Error("Invalid NMEA hemisphere");
+    return (degrees + minutes / 60) * (hemisphere === negative ? -1 : 1);
+  };
+  const time = (value) => {
+    const m = /^([0-9]{2})([0-9]{2})([0-9]{2})(?:\\.([0-9]+))?$/.exec(value);
+    if (!m) throw new Error("Invalid NMEA UTC time");
+    const hour = Number(m[1]), minute = Number(m[2]), second = Number(m[3]), millis = Number((m[4] || "").padEnd(3,"0").slice(0,3));
+    if (hour > 23 || minute > 59 || second > 59) throw new Error("NMEA UTC time out of range");
+    return {hour,minute,second,millis};
+  };
+  if (type === "RMC") {
+    if (fields.length < 10 || fields[2] !== "A") throw new Error("NMEA RMC has no valid fix");
+    const t = time(fields[1]);
+    if (!/^[0-9]{6}$/.test(fields[9])) throw new Error("Invalid NMEA date");
+    const day = Number(fields[9].slice(0,2)), month = Number(fields[9].slice(2,4)), yy = Number(fields[9].slice(4,6)), year = yy >= 80 ? 1900+yy : 2000+yy;
+    const date = new Date(Date.UTC(year,month-1,day));
+    if (month<1 || month>12 || day<1 || date.getUTCFullYear()!==year || date.getUTCMonth()!==month-1 || date.getUTCDate()!==day) throw new Error("NMEA date out of range");
+    const recordedAt = new Date(Date.UTC(year,month-1,day,t.hour,t.minute,t.second,t.millis)).toISOString();
+    const knots = fields[7] === "" ? null : Number(fields[7]), heading = fields[8] === "" ? null : Number(fields[8]);
+    if ((knots!==null && (!Number.isFinite(knots)||knots<0)) || (heading!==null && (!Number.isFinite(heading)||heading<0||heading>=360))) throw new Error("Invalid NMEA motion fields");
+    return {sentence:"RMC",latitude:coordinate(fields[3],fields[4],2,90),longitude:coordinate(fields[5],fields[6],3,180),speedKmh:knots===null?null:knots*1.852,heading,recordedAt};
+  }
+  if (fields.length < 10) throw new Error("NMEA GGA has no valid fix");
+  time(fields[1]);
+  const quality=Number(fields[6]), satellites=Number(fields[7]), altitude=fields[9]===""?NaN:Number(fields[9]);
+  if (!Number.isInteger(quality)||quality<1||quality>8||!Number.isInteger(satellites)||satellites<0||satellites>99||!Number.isFinite(altitude)) throw new Error("Invalid NMEA GGA quality data");
+  return {sentence:"GGA",latitude:coordinate(fields[2],fields[3],2,90),longitude:coordinate(fields[4],fields[5],3,180),satellites,fixQuality:quality,altitudeMeters:altitude};
+}
+function parseGt06LocationFrame(frameHex) {
+  if (typeof frameHex !== "string" || frameHex.length < 20 || frameHex.length > 520 || frameHex.length % 2 || !/^[0-9a-f]+$/i.test(frameHex)) throw new Error("Invalid GT06 hex frame");
+  const bytes = Uint8Array.from(frameHex.match(/.{2}/g), (pair) => Number.parseInt(pair,16));
+  const short = bytes[0]===0x78 && bytes[1]===0x78, extended=bytes[0]===0x79 && bytes[1]===0x79;
+  if (!short&&!extended) throw new Error("Invalid GT06 start marker");
+  const header=short?3:4; if(bytes.length<header+7)throw new Error("Truncated GT06 frame");
+  const length=short?bytes[2]:(bytes[2]<<8)|bytes[3]; if(length<5||bytes.length!==length+(short?5:6))throw new Error("Invalid GT06 frame length");
+  if(bytes.at(-2)!==0x0d||bytes.at(-1)!==0x0a)throw new Error("Invalid GT06 stop bits");
+  const crcOffset=bytes.length-4;let crc=0xffff;
+  for(let i=2;i<crcOffset;i++){crc^=bytes[i];for(let bit=0;bit<8;bit++)crc=(crc&1)?(crc>>>1)^0x8408:crc>>>1;}
+  crc=(crc^0xffff)&0xffff;const received=(bytes[crcOffset]<<8)|bytes[crcOffset+1];if(crc!==received)throw new Error("GT06 CRC mismatch");
+  const protocol=bytes[header],serialOffset=crcOffset-2,payload=bytes.slice(header+1,serialOffset);
+  if(protocol!==0x12||payload.length<18)throw new Error("Unsupported GT06 location packet");
+  const year=2000+payload[0],month=payload[1],day=payload[2],hour=payload[3],minute=payload[4],second=payload[5];
+  const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));
+  if(month<1||month>12||day<1||day>31||hour>23||minute>59||second>59||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)throw new Error("Invalid GT06 device time");
+  const satellites=payload[6]&0x0f,latRaw=(payload[7]*0x1000000)+(payload[8]<<16)+(payload[9]<<8)+payload[10],lonRaw=(payload[11]*0x1000000)+(payload[12]<<16)+(payload[13]<<8)+payload[14],speed=payload[15],course=(payload[16]<<8)|payload[17],flags=payload[16];
+  const latitude=latRaw/1800000*((flags&4)?1:-1),longitude=lonRaw/1800000*((flags&8)?1:-1),heading=course&0x03ff;
+  if(latRaw>90*1800000||lonRaw>180*1800000||heading>360)throw new Error("GT06 location out of range");
+  if(!(flags&0x10))throw new Error("GT06 location has no GPS fix");
+  return {year,month,day,hour,minute,second,satellites,latitude,longitude,speedKmh:speed,heading};
+}
 function parseLimit(value, fallback, min, max) {
   if (value === null || value === undefined || value === "") return fallback;
   if (!/^[0-9]+$/.test(value)) return null;
@@ -452,6 +516,44 @@ export default {
         if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
         const { response, data } = await supabaseServiceRpc(env, "darb_api_tracker_heartbeat", { p_credential_hash: credentialHash, p_protocol: "gt06" });
         if (!response.ok) return json({ message: "Tracker heartbeat rejected" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/device-gateway/ingest/nmea" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        const credentialHash = await hashTrackerBearer(authorization);
+        if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        if (typeof body?.sentence !== "string" || body.sentence.length > 256 || (body.pairedUtcTimestamp !== undefined && (typeof body.pairedUtcTimestamp !== "string" || !Number.isFinite(Date.parse(body.pairedUtcTimestamp))))) return json({ message: "Invalid NMEA payload" }, 400, headers);
+        const profileResult = await supabaseServiceRpc(env, "darb_api_get_gps_tracker_profile", { p_credential_hash: credentialHash });
+        if (!profileResult.response.ok) return json({ message: "Tracker credential invalid or revoked" }, rpcErrorStatus(profileResult.response, profileResult.data), headers);
+        if (profileResult.data?.protocol !== "nmea") return json({ message: "Tracker is not enrolled for NMEA" }, 400, headers);
+        let fix; try { fix = parseNmeaSentence(body.sentence); } catch { return json({ message: "Invalid NMEA sentence" }, 400, headers); }
+        const recordedAt = fix.sentence === "RMC" ? fix.recordedAt : body.pairedUtcTimestamp;
+        if (!recordedAt || !Number.isFinite(Date.parse(recordedAt))) return json({ message: "NMEA GGA requires a trusted paired UTC timestamp" }, 400, headers);
+        const { response, data } = await supabaseServiceRpc(env, "darb_api_ingest_gps_tracker", { p_credential_hash: credentialHash, p_protocol: "nmea", p_latitude: fix.latitude, p_longitude: fix.longitude, p_speed_kmh: fix.speedKmh ?? 0, p_heading: fix.heading ?? null, p_recorded_at: new Date(recordedAt).toISOString(), p_event_id: null, p_tamper: false });
+        if (!response.ok) return json({ message: "NMEA telemetry rejected" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/device-gateway/ingest/gt06" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        const credentialHash = await hashTrackerBearer(authorization);
+        if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        if (typeof body?.frameHex !== "string") return json({ message: "Invalid GT06 frame payload" }, 400, headers);
+        const profileResult = await supabaseServiceRpc(env, "darb_api_get_gps_tracker_profile", { p_credential_hash: credentialHash });
+        if (!profileResult.response.ok) return json({ message: "Tracker credential invalid or revoked" }, rpcErrorStatus(profileResult.response, profileResult.data), headers);
+        if (profileResult.data?.protocol !== "gt06") return json({ message: "Tracker is not enrolled for GT06" }, 400, headers);
+        const timezoneOffsetMinutes = profileResult.data.timezone_offset_minutes;
+        if (!Number.isInteger(timezoneOffsetMinutes)) return json({ message: "GT06 timezone is not configured" }, 503, headers);
+        let fix; try { fix = parseGt06LocationFrame(body.frameHex); } catch { return json({ message: "Invalid GT06 frame or location" }, 400, headers); }
+        const localAsUtc = Date.UTC(fix.year,fix.month-1,fix.day,fix.hour,fix.minute,fix.second);
+        const recordedAt = new Date(localAsUtc-timezoneOffsetMinutes*60000).toISOString();
+        const { response, data } = await supabaseServiceRpc(env, "darb_api_ingest_gps_tracker", { p_credential_hash: credentialHash, p_protocol: "gt06", p_latitude: fix.latitude, p_longitude: fix.longitude, p_speed_kmh: fix.speedKmh, p_heading: fix.heading, p_recorded_at: recordedAt, p_event_id: null, p_tamper: false });
+        if (!response.ok) return json({ message: "GT06 telemetry rejected" }, rpcErrorStatus(response, data), headers);
         return json(data, 200, headers);
       }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {

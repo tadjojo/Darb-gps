@@ -564,6 +564,31 @@ export default {
         if (!response.ok) return json({ message: "GT06 telemetry rejected" }, rpcErrorStatus(response, data), headers);
         return json(data, 200, headers);
       }
+
+      const addMemberMatch = url.pathname.match(new RegExp("^/api/v1/vehicles/([^/]+)/members$"));
+      if (addMemberMatch && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = addMemberMatch[1]; const body = await request.json().catch(() => null);
+        const userId = typeof body?.userId === "string" ? body.userId : "", role = body?.role;
+        if (!UUID_RE.test(vehicleId) || !UUID_RE.test(userId) || !["owner","manager","driver","viewer"].includes(role)) return json({ message: "Invalid membership request" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_add_vehicle_member", { p_vehicle_id: vehicleId, p_user_id: userId, p_role: role }, authorization);
+        if (!response.ok) return json({ message: "Member assignment failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 201, headers);
+      }
+
+      const revokeMemberMatch = url.pathname.match(new RegExp("^/api/v1/vehicles/([^/]+)/members/([^/]+)$"));
+      if (revokeMemberMatch && request.method === "DELETE") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = revokeMemberMatch[1], memberUserId = revokeMemberMatch[2];
+        if (!UUID_RE.test(vehicleId) || !UUID_RE.test(memberUserId)) return json({ message: "Invalid membership request" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_revoke_vehicle_member", { p_vehicle_id: vehicleId, p_member_user_id: memberUserId }, authorization);
+        if (!response.ok) return json({ message: "Member revocation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

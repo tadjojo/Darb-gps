@@ -24,12 +24,12 @@ Test after deployment:
 - `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live`
 - `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/ready`
 
-Do not change the dashboard's API base URL until both health checks pass and authenticated smoke tests pass through the Worker.
+The dashboard default API base is now `https://darb-gps-new.tadjojo.workers.dev/api/v1`. The API Worker must be successfully deployed and pass both health checks before login and authenticated features can work. If this browser has an older `darb_api` value saved in local storage, update it from Settings to the URL above.
 
 ## Next stages
 
 1. Deploy and verify this edge Worker.
-2. Update the dashboard API base to the Worker URL and test login, organizations, vehicles, tracking, alerts, and CORS.
+2. After both health checks pass, test login, organizations, vehicles, tracking, alerts, and CORS through the configured Worker URL.
 3. Move eligible HTTP API routes to native Workers gradually. The current NestJS/Express application cannot be copied to Workers unchanged.
 4. Deploy the TCP tracker gateway on a separate TCP-capable host; keep it independent from the HTTP API.
 5. Create a Cloudflare Pages project for the dashboard and verify it before changing or removing GitHub Pages/Render.

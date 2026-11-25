@@ -134,13 +134,13 @@ AS $$
 DECLARE v_user uuid:=auth.uid(); v_org uuid; v_role text; v_row private.darb_alert_rules;
 BEGIN
  IF v_user IS NULL THEN RAISE EXCEPTION 'Authentication required' USING ERRCODE='42501'; END IF;
- IF p_vehicle_id IS NULL OR p_type NOT IN ('speed_limit','geofence') OR p_name IS NULL OR length(trim(p_name)) NOT BETWEEN 1 AND 120 OR p_config IS NULL OR jsonb_typeof(p_config)<>'object' THEN RAISE EXCEPTION 'Invalid rule payload' USING ERRCODE='22023'; END IF;
+ IF p_vehicle_id IS NULL OR p_type IS NULL OR p_type NOT IN ('speed_limit','geofence') OR p_name IS NULL OR length(trim(p_name)) NOT BETWEEN 1 AND 120 OR p_config IS NULL OR jsonb_typeof(p_config)<>'object' THEN RAISE EXCEPTION 'Invalid rule payload' USING ERRCODE='22023'; END IF;
  SELECT v.organization_id,vm.role INTO v_org,v_role FROM public.vehicles v JOIN public.vehicle_members vm ON vm.vehicle_id=v.id
  WHERE v.id=p_vehicle_id AND v.status='active' AND vm.user_id=v_user AND vm.status='active';
  IF v_role IS NULL THEN RAISE EXCEPTION 'Vehicle not found' USING ERRCODE='P0002'; END IF;
  IF v_role NOT IN ('owner','manager') THEN RAISE EXCEPTION 'Only owners/managers can manage alert rules' USING ERRCODE='42501'; END IF;
- IF p_type='speed_limit' AND (jsonb_typeof(p_config->'limitKmh')<>'number' OR (p_config->>'limitKmh')::numeric NOT BETWEEN 1 AND 300) THEN RAISE EXCEPTION 'Speed limit must be 1..300' USING ERRCODE='22023'; END IF;
- IF p_type='geofence' AND (jsonb_typeof(p_config->'latitude')<>'number' OR jsonb_typeof(p_config->'longitude')<>'number' OR jsonb_typeof(p_config->'radiusMeters')<>'number' OR (p_config->>'latitude')::numeric NOT BETWEEN -90 AND 90 OR (p_config->>'longitude')::numeric NOT BETWEEN -180 AND 180 OR (p_config->>'radiusMeters')::numeric NOT BETWEEN 25 AND 100000) THEN RAISE EXCEPTION 'Invalid geofence coordinates/radius' USING ERRCODE='22023'; END IF;
+ IF p_type='speed_limit' AND (jsonb_typeof(p_config->'limitKmh') IS DISTINCT FROM 'number' OR (p_config->>'limitKmh')::numeric NOT BETWEEN 1 AND 300) THEN RAISE EXCEPTION 'Speed limit must be 1..300' USING ERRCODE='22023'; END IF;
+ IF p_type='geofence' AND (jsonb_typeof(p_config->'latitude') IS DISTINCT FROM 'number' OR jsonb_typeof(p_config->'longitude') IS DISTINCT FROM 'number' OR jsonb_typeof(p_config->'radiusMeters') IS DISTINCT FROM 'number' OR (p_config->>'latitude')::numeric NOT BETWEEN -90 AND 90 OR (p_config->>'longitude')::numeric NOT BETWEEN -180 AND 180 OR (p_config->>'radiusMeters')::numeric NOT BETWEEN 25 AND 100000) THEN RAISE EXCEPTION 'Invalid geofence coordinates/radius' USING ERRCODE='22023'; END IF;
  INSERT INTO private.darb_alert_rules(organization_id,vehicle_id,rule_type,name,config,enabled,created_by)
  VALUES(v_org,p_vehicle_id,p_type,trim(p_name),p_config,coalesce(p_enabled,true),v_user)
  RETURNING * INTO v_row;

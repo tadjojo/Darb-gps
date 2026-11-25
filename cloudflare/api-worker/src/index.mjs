@@ -11,6 +11,10 @@ function allowedOrigins(env) {
 function cors(origin, env) {
   const h = new Headers({
     "Vary": "Origin",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "default-src \'none\'; frame-ancestors \'none\';",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, X-Requested-With",
     "Access-Control-Max-Age": "86400",
@@ -26,6 +30,10 @@ function json(data, status, headers) {
   const h = new Headers(headers || {});
   h.set("Content-Type", "application/json; charset=utf-8");
   h.set("Cache-Control", "no-store");
+  h.set("X-Content-Type-Options", "nosniff");
+  h.set("Referrer-Policy", "no-referrer");
+  h.set("X-Frame-Options", "DENY");
+  h.set("Content-Security-Policy", "default-src \'none\'; frame-ancestors \'none\;");
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 

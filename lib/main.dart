@@ -105,8 +105,23 @@ class _HomePageState extends State<HomePage> {
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
       if (!loggedIn) return;
-      final refreshed = await api.refreshAccessToken();
-      if (refreshed != null && vehicleId != null) await _connectRealtime();
+      try {
+        final refreshed = await api.refreshAccessToken();
+        if (refreshed != null && vehicleId != null) {
+          await _connectRealtime();
+        } else if (refreshed == null) {
+          // A rejected/expired refresh token clears local credentials in DarbClient.
+          realtime.disconnect();
+          if (mounted) setState(() {
+            loggedIn = false;
+            socketConnected = false;
+            message = tr('انتهت جلسة الدخول؛ يرجى تسجيل الدخول مجدداً', 'Your session expired; please sign in again');
+          });
+        }
+      } catch (_) {
+        // A temporary network failure must not crash the timer or erase a valid session.
+        if (mounted) setState(() => message = tr('تعذر تجديد الجلسة مؤقتاً؛ ستتم إعادة المحاولة', 'Session refresh temporarily unavailable; will retry'));
+      }
     });
   }
 

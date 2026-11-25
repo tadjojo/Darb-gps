@@ -126,3 +126,36 @@ test("refresh proxies token to Supabase and maps rotated tokens", async () => {
     assert.deepEqual(await res.json(), { accessToken: "new-access", refreshToken: "new-refresh" });
   } finally { globalThis.fetch = originalFetch; }
 });
+
+
+test("auth/me rejects missing bearer token", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/me"), env);
+  assert.equal(res.status, 401);
+});
+
+test("auth/me validates bearer with Supabase and returns safe user profile", async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = "";
+  let authHeader = "";
+  globalThis.fetch = async (input, init = {}) => {
+    calledUrl = String(input);
+    authHeader = new Headers(init.headers).get("Authorization") || "";
+    return new Response(JSON.stringify({ id: "user-123", email: "test@example.org", phone: null, user_metadata: { display_name: "Tester" }, app_metadata: { provider: "email" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/me", { headers: { Authorization: "Bearer sample-access" } }), env);
+    assert.equal(res.status, 200);
+    assert.match(calledUrl, /\/auth\/v1\/user$/);
+    assert.equal(authHeader, "Bearer sample-access");
+    assert.deepEqual(await res.json(), { id: "user-123", email: "test@example.org", phone: null, role: null, userMetadata: { display_name: "Tester" } });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("auth/me maps invalid upstream token to 401", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "invalid token" }), { status: 401 });
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/me", { headers: { Authorization: "Bearer expired" } }), env);
+    assert.equal(res.status, 401);
+  } finally { globalThis.fetch = originalFetch; }
+});

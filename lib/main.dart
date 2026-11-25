@@ -54,7 +54,7 @@ class _HomePageState extends State<HomePage> {
   int selectedRouteIndex = 0;
   bool searchingPlaces = false, calculatingRoute = false;
   int _placeSearchGeneration = 0, _routeGeneration = 0;
-  final _apiUrl = TextEditingController(text: 'https://darb-gps-x.onrender.com');
+  final _apiUrl = TextEditingController(text: DarbClient.defaultApiBaseUrl);
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   final _orgName = TextEditingController(text: 'مؤسستي');

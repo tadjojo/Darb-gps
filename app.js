@@ -9,7 +9,7 @@
     {id:'demo-5',name:'مركبة المتابعة 06',plate:'12-66310',driver:'ليث محمود',status:'moving',updated:'منذ 5 دقائق',lat:31.71,lng:35.793}
   ];
   let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, routeMarkers = [], alertCount = 0, alertKnownIds = new Set(), alertBaselineReady = false, alertPollBusy = false, alertPollTimer = null, token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
-  let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-x.onrender.com/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
+  let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-new.tadjojo.workers.dev/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
   const statusText = {moving:'تتحرك',stopped:'متوقفة',offline:'غير متصلة'};
   const vehicleRow = v => `<tr><td><div class="vehicle-cell"><span class="vehicle-icon">▰</span>${escapeHtml(v.name)}</div></td><td dir="ltr">${escapeHtml(v.plate || '—')}</td><td>${escapeHtml(v.driver || '—')}</td><td><span class="status ${v.status}">${statusText[v.status] || 'غير معروف'}</span></td><td>${escapeHtml(v.updated || '—')}</td>${v.id?.startsWith('demo-')?'':'<td></td>'}</tr>`;
   function escapeHtml(s){return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}

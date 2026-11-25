@@ -52,7 +52,7 @@ npm run check
 npm run dev
 ```
 
-CI currently validates Node tests and Wrangler bundling/dry-run.
+CI currently validates Node tests and Wrangler bundling/dry-run; the test suite includes protocol adapter checks.
 
 ## Deployment (do not replace production yet)
 

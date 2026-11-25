@@ -102,6 +102,19 @@ export default {
         if (!response.ok) return json({ message: "Logout failed" }, response.status, headers);
         return new Response(null, { status: 204, headers });
       }
+
+      if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const upstream = await fetch(new URL("/auth/v1/user", env.SUPABASE_URL), {
+          method: "GET",
+          headers: { "apikey": env.SUPABASE_PUBLISHABLE_KEY, "Authorization": authorization },
+        });
+        const user = await upstream.json().catch(() => ({}));
+        if (!upstream.ok) return json({ message: "Authentication token is invalid or expired" }, 401, headers);
+        return json({ id: user.id, email: user.email ?? null, phone: user.phone ?? null, role: user.role ?? null, userMetadata: user.user_metadata ?? {} }, 200, headers);
+      }
       return json({ status: "not_implemented", message: "This route is not yet migrated to the Free Worker API. Existing API is not replaced until migration is completed." }, 501, headers);
     } catch {
       return json({ status: "error", message: "API configuration or upstream request failed" }, 502, headers);

@@ -44,14 +44,14 @@ Prototype routes now exist for mobile enrollment, device listing, location inges
 
 Prototype routes now include GPS tracker enrollment with one-time random credential, rotation/revocation, credential-hash JSON ingestion, GT06 heartbeat, and HTTPS adapters for GT06 frames and NMEA sentences. SQL functions were rollback-tested. Raw TCP receiving still needs a separate gateway, and these migrations have not been applied.
 
-## Stage 4 — Alerts and rules
+## Stage 4 — Alerts and rules (prototype routes and evaluation implemented; SQL migration staged)
 
 - List alerts with status/vehicle filters.
 - Acknowledge and resolve alerts.
 - List and create speed-limit and geofence rules.
 - Device-offline alerts and tamper events.
 
-Required prerequisite: confirmed rule validation, permission checks, transactional alert state, geospatial calculations, and event delivery/notification.
+Alert APIs are implemented for listing, acknowledging, resolving, listing rules, and creating speed/geofence rules. SQL functions now evaluate speed-limit crossings, geofence entry/exit, tamper, and offline-device recovery. Runtime tests were performed in rollback-only transactions. Remaining: real integration testing and notification/realtime delivery.
 
 ## Stage 5 — Realtime, admin, and release
 

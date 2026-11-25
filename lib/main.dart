@@ -84,6 +84,7 @@ class _HomePageState extends State<HomePage> {
   LatLng? historicalTripStart, historicalTripEnd;
   Timer? syncTimer;
   Timer? tokenTimer;
+  Timer? alertsTimer;
   Timer? gpsRetryTimer;
   int _gpsRetryAttempt = 0;
   int _trackingGeneration = 0;
@@ -487,7 +488,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _trackingGeneration++; _placeSearchGeneration++; _routeGeneration++; gpsRetryTimer?.cancel();
-    gpsSub?.cancel(); realtime.dispose(); queue.close(); syncTimer?.cancel(); tokenTimer?.cancel();
+    gpsSub?.cancel(); realtime.dispose(); queue.close(); syncTimer?.cancel(); tokenTimer?.cancel(); alertsTimer?.cancel();
     _apiUrl.dispose(); _identifier.dispose(); _password.dispose(); _orgName.dispose(); _vehicleName.dispose(); _registration.dispose();
     _placeSearch.dispose(); navigation.close();
     super.dispose();
@@ -502,7 +503,7 @@ class _HomePageState extends State<HomePage> {
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),
         actions: [IconButton(onPressed: widget.toggleLanguage, icon: const Icon(Icons.language)), IconButton(onPressed: _loadLatest, icon: const Icon(Icons.refresh))]),
       body: Column(children: [Expanded(child: pages[tab]), Container(width: double.infinity, color: const Color(0xFFE8F2FF), padding: const EdgeInsets.all(9), child: Text(message, textAlign: TextAlign.center))]),
-      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) { setState(() => tab = v); if (v == 2) _loadDevices(); if (v == 3) _loadTrips(); if (v == 4) _loadAlerts(); }, destinations: [
+      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) { setState(() => tab = v); alertsTimer?.cancel(); if (v == 2) _loadDevices(); if (v == 3) _loadTrips(); if (v == 4) { _loadAlerts(); alertsTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadAlerts()); } }, destinations: [
         NavigationDestination(icon: const Icon(Icons.map_outlined), label: tr('الخريطة', 'Map')),
         NavigationDestination(icon: const Icon(Icons.share_location), label: tr('التتبع', 'Tracking')),
         NavigationDestination(icon: const Icon(Icons.directions_car), label: tr('المركبات', 'Vehicles')),

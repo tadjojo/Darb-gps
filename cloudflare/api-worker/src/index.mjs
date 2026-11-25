@@ -105,11 +105,20 @@ async function supabaseRpc(env, functionName, args, authorization) {
 }
 
 
+
+async function generateTrackerCredential() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const secret = btoa(String.fromCharCode(...bytes)).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  const hash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return { secret, hash };
+}
 function rpcErrorStatus(response, data) {
   if (response.status === 401) return 401;
   if (response.status === 403 || data?.code === "42501") return 403;
   if (response.status === 404 || data?.code === "P0002") return 404;
-  if (response.status === 400 || ["22023", "23514"].includes(data?.code)) return 400;
+  if (response.status === 409 || data?.code === "23505") return 409;\n  if (response.status === 400 || ["22023", "23514"].includes(data?.code)) return 400;
   return 502;
 }
 
@@ -340,6 +349,56 @@ export default {
         const { response, data } = await supabaseRpc(env, "darb_api_location_points", { p_vehicle_id: vehicleId, p_from: range.from, p_to: range.to, p_limit: 10000, p_order_desc: false, p_max_days: 31 }, authorization);
         if (!response.ok) return json({ message: "Stops unavailable" }, rpcErrorStatus(response, data), headers);
         return json({ data: makeStops(Array.isArray(data) ? data : [], limit) }, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/tracking/devices/gps" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const vehicleId = typeof body?.vehicleId === "string" ? body.vehicleId : "";
+        const label = typeof body?.label === "string" ? body.label.trim() : null;
+        const protocol = body?.protocol === undefined ? "json" : body.protocol;
+        const imei = body?.imei === undefined ? null : body.imei;
+        const model = body?.model === undefined ? null : (typeof body.model === "string" ? body.model.trim() : body.model);
+        const timezoneOffsetMinutes = body?.timezoneOffsetMinutes === undefined ? null : body.timezoneOffsetMinutes;
+        if (!UUID_RE.test(vehicleId) || !["json", "gt06", "nmea"].includes(protocol) ||
+            (label !== null && (typeof label !== "string" || label.length > 100)) ||
+            (model !== null && (typeof model !== "string" || model.length > 80)) ||
+            (imei !== null && (typeof imei !== "string" || !/^[0-9]{8,20}$/.test(imei))) ||
+            (timezoneOffsetMinutes !== null && (!Number.isInteger(timezoneOffsetMinutes) || timezoneOffsetMinutes < -840 || timezoneOffsetMinutes > 840)) ||
+            (protocol === "gt06" && (!imei || timezoneOffsetMinutes === null)) ||
+            (protocol === "nmea" && !imei)) return json({ message: "Invalid GPS tracker profile" }, 400, headers);
+        const { secret, hash } = await generateTrackerCredential();
+        const { response, data } = await supabaseRpc(env, "darb_api_enroll_gps_tracker", {
+          p_vehicle_id: vehicleId, p_label: label, p_protocol: protocol, p_imei: imei,
+          p_model: model, p_timezone_offset_minutes: timezoneOffsetMinutes, p_credential_hash: hash,
+        }, authorization);
+        if (!response.ok) return json({ message: "GPS tracker enrollment failed" }, rpcErrorStatus(response, data), headers);
+        return json({ device: data, credential: secret, credentialFormat: "Authorization: Bearer <credential>", warning: "Store this credential securely; it is shown only once." }, 201, headers);
+      }
+
+      const rotateMatch = url.pathname.match(new RegExp("^/api/v1/tracking/devices/gps/([^/]+)/rotate-credential$"));
+      if (rotateMatch && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const deviceId = rotateMatch[1]; if (!UUID_RE.test(deviceId)) return json({ message: "Invalid device ID" }, 400, headers);
+        const { secret, hash } = await generateTrackerCredential();
+        const { response, data } = await supabaseRpc(env, "darb_api_rotate_gps_credential", { p_device_id: deviceId, p_credential_hash: hash }, authorization);
+        if (!response.ok) return json({ message: "Credential rotation failed" }, rpcErrorStatus(response, data), headers);
+        return json({ deviceId: data.deviceId, protocol: data.protocol, credential: secret, credentialFormat: "Authorization: Bearer <credential>", warning: "Previous credential is invalid immediately. Store this new credential securely; it is shown only once." }, 200, headers);
+      }
+
+      const revokeMatch = url.pathname.match(new RegExp("^/api/v1/tracking/devices/gps/([^/]+)/revoke$"));
+      if (revokeMatch && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const deviceId = revokeMatch[1]; if (!UUID_RE.test(deviceId)) return json({ message: "Invalid device ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_revoke_gps_tracker", { p_device_id: deviceId }, authorization);
+        if (!response.ok) return json({ message: "Tracker revocation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
       }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";

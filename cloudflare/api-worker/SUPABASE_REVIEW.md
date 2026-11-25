@@ -55,3 +55,8 @@ Tracker provisioning, rotation, revocation, profile lookup, JSON telemetry, dupl
 ## Vehicle-membership RPC verification
 
 The staged membership RPC migration was syntax-tested and the add-member RPC was exercised under the authenticated role in a rollback-only transaction. A read-only verification confirmed the test organization was removed by rollback. Membership revocation and role-denial behavior remains covered by Worker mock tests; it has not been applied to live schema.
+
+
+## Alert RPC rollback functional test
+
+The staged alert API/evaluation SQL was exercised under authenticated-role context inside a rollback-only transaction. The test created speed/geofence rules, enrolled a mobile device, inserted two locations that crossed the speed threshold and entered a geofence, verified both alerts were generated, acknowledged/resolved an alert, and confirmed the test organization was removed after rollback. This is functional validation only; migrations remain staged and no live data was changed.

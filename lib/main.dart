@@ -13,6 +13,9 @@ import 'services/pending_location_store.dart';
 import 'services/realtime_client.dart';
 import 'services/navigation_service.dart';
 import 'services/gps_coordinate_validator.dart';
+import 'services/gps_tracker_api.dart';
+import 'widgets/alerts_panel.dart';
+import 'widgets/gps_tracker_panel.dart';
 
 void main() => runApp(const DarbApp());
 
@@ -44,6 +47,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _storage = FlutterSecureStorage();
   late final DarbClient api = DarbClient(_storage);
+  late final GpsTrackerApi trackerApi = GpsTrackerApi(api);
   final PendingLocationStore queue = PendingLocationStore();
   final DarbRealtimeClient realtime = DarbRealtimeClient();
   final MapController mapController = MapController();
@@ -422,7 +426,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final center = position ?? const LatLng(31.9539, 35.9106);
-    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), settingsScreen()];
+    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: vehicleId, active: tab == 4, arabic: widget.arabic, position: position), GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: vehicleId, active: tab == 5, arabic: widget.arabic), settingsScreen()];
     return Directionality(textDirection: widget.arabic ? TextDirection.rtl : TextDirection.ltr, child: Scaffold(
       appBar: AppBar(backgroundColor: Colors.white,
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),
@@ -433,6 +437,8 @@ class _HomePageState extends State<HomePage> {
         NavigationDestination(icon: const Icon(Icons.share_location), label: tr('التتبع', 'Tracking')),
         NavigationDestination(icon: const Icon(Icons.directions_car), label: tr('المركبات', 'Vehicles')),
         NavigationDestination(icon: const Icon(Icons.route), label: tr('الرحلات', 'Trips')),
+        NavigationDestination(icon: const Icon(Icons.notifications), label: tr('التنبيهات', 'Alerts')),
+        NavigationDestination(icon: const Icon(Icons.router), label: tr('GPS خارجي', 'GPS devices')),
         NavigationDestination(icon: const Icon(Icons.settings), label: tr('الإعدادات', 'Settings')),
       ]),
     ));

@@ -64,7 +64,7 @@ class _HomePageState extends State<HomePage> {
   int tab = 0;
   LatLng? position;
   StreamSubscription<Position>? gpsSub;
-  bool tracking = false, sharing = false, loggedIn = false, socketConnected = false, busy = false, syncing = false;
+  bool tracking = false, sharing = false, loggedIn = false, liveConnected = false, busy = false, syncing = false;
   String message = 'جاهز';
   String? vehicleId, deviceId, organizationId;
   int pendingCount = 0;
@@ -115,7 +115,7 @@ class _HomePageState extends State<HomePage> {
           realtime.disconnect();
           if (mounted) setState(() {
             loggedIn = false;
-            socketConnected = false;
+            liveConnected = false;
             message = tr('انتهت جلسة الدخول؛ يرجى تسجيل الدخول مجدداً', 'Your session expired; please sign in again');
           });
         }
@@ -256,7 +256,7 @@ class _HomePageState extends State<HomePage> {
     realtime.connect(baseUrl: await api.baseUrl, accessToken: token, vehicleId: vId,
       onConnection: (value) async {
         if (!mounted) return;
-        setState(() => socketConnected = value);
+        setState(() => liveConnected = value);
         if (value) await _loadLatest();
       },
       onLocation: (event) {
@@ -413,7 +413,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _trackingGeneration++; _placeSearchGeneration++; _routeGeneration++; gpsRetryTimer?.cancel();
-    gpsSub?.cancel(); realtime.disconnect(); queue.close(); syncTimer?.cancel(); tokenTimer?.cancel();
+    gpsSub?.cancel(); realtime.dispose(); queue.close(); syncTimer?.cancel(); tokenTimer?.cancel();
     _apiUrl.dispose(); _identifier.dispose(); _password.dispose(); _orgName.dispose(); _vehicleName.dispose(); _registration.dispose();
     _placeSearch.dispose(); navigation.close();
     super.dispose();
@@ -502,7 +502,7 @@ class _HomePageState extends State<HomePage> {
   Widget trackingScreen() => ListView(padding: const EdgeInsets.all(16), children: [
     Text(tr('التتبع المباشر', 'Live tracking'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
     Card(child: SwitchListTile(value: sharing, onChanged: (v) => v ? startTracking() : stopTracking(), secondary: const Icon(Icons.person_pin_circle), title: Text(tr('مشاركة موقعي', 'Share my location')), subtitle: Text(tr('تبدأ المشاركة بعد موافقتك فقط', 'Sharing starts only with your consent')))),
-    Card(child: ListTile(leading: Icon(socketConnected ? Icons.wifi : Icons.wifi_off), title: Text(tr('الاتصال المباشر', 'Realtime connection')), subtitle: Text(socketConnected ? tr('متصل', 'Connected') : tr('غير متصل؛ تتم المزامنة عبر REST', 'Disconnected; REST sync remains available')))),
+    Card(child: ListTile(leading: Icon(liveConnected ? Icons.wifi : Icons.wifi_off), title: Text(tr('تحديث الموقع المباشر', 'Live location updates')), subtitle: Text(liveConnected ? tr('متصل عبر REST كل 10 ثوانٍ', 'Connected via REST polling every 10 seconds') : tr('غير متصل؛ ستتم إعادة المحاولة', 'Disconnected; retrying')))),
     Card(child: ListTile(leading: const Icon(Icons.cloud_upload_outlined), title: Text(tr('مواقع بانتظار المزامنة', 'Pending locations')), trailing: Text('$pendingCount'), onTap: _syncQueue)),
     Card(child: ListTile(leading: const Icon(Icons.shield_outlined), title: Text(tr('الخصوصية والأمان', 'Privacy & security')), subtitle: Text(tr('التتبع يعمل في الواجهة الأمامية فقط ويمكن إيقافه', 'Foreground-only tracking; you can stop it anytime')))),
   ]);
@@ -579,7 +579,7 @@ class _HomePageState extends State<HomePage> {
     TextField(controller: _vehicleName, decoration: InputDecoration(labelText: tr('اسم المركبة', 'Vehicle name'))),
     TextField(controller: _registration, decoration: InputDecoration(labelText: tr('رقم التسجيل (اختياري)', 'Registration (optional)'))),
     FilledButton.tonal(onPressed: loggedIn && !busy ? _createOrgVehicle : null, child: Text(tr('إنشاء واعتماد الهاتف', 'Create & enroll phone'))),
-    if (loggedIn) TextButton.icon(onPressed: () async { await api.logout(); realtime.disconnect(); if (mounted) setState(() { loggedIn = false; socketConnected = false; message = tr('تم تسجيل الخروج', 'Signed out'); }); }, icon: const Icon(Icons.logout), label: Text(tr('تسجيل الخروج', 'Sign out'))),
+    if (loggedIn) TextButton.icon(onPressed: () async { await api.logout(); realtime.disconnect(); if (mounted) setState(() { loggedIn = false; liveConnected = false; message = tr('تم تسجيل الخروج', 'Signed out'); }); }, icon: const Icon(Icons.logout), label: Text(tr('تسجيل الخروج', 'Sign out'))),
     const Divider(height: 28),
     ListTile(leading: const Icon(Icons.language), title: Text(tr('اللغة', 'Language')), subtitle: Text(widget.arabic ? 'العربية' : 'English'), trailing: IconButton(onPressed: widget.toggleLanguage, icon: const Icon(Icons.swap_horiz))),
     const ListTile(leading: Icon(Icons.info_outline), title: Text('DARB GPS • Mobile Alpha')),

@@ -40,3 +40,8 @@ The actual project schema and roles are now confirmed. Organization/vehicle oper
 ## Rollback-only functional verification of staged RPCs
 
 The staged organization/vehicle and mobile RPC definitions were temporarily installed within a transaction and exercised under the `authenticated` role with an auth UID set for the test context. The tests covered creating an organization and admin membership, creating a vehicle and owner membership, mobile enrollment, first location ingestion, duplicate event handling, latest-location query, and device listing. The transaction was rolled back, then queried to confirm zero test organization, vehicle, mobile device, and location rows remained. The same transaction verified the first location write and duplicate-event rejection. After rollback, a read-only query confirmed zero test organization, vehicle, mobile-device, or location rows remained. This verifies function behavior but is not a substitute for live API/Flutter integration testing.
+
+
+## Rollback-only location-history functional test
+
+The staged scoped location-history RPC was tested in a rollback-only transaction by creating a test organization, vehicle, and three timestamped locations under an authenticated-role context, then verifying the RPC returned three ordered points. The transaction was rolled back and a follow-up query confirmed no test organization remained. No production data was added.

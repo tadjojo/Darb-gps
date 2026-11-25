@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
     if (mounted) setState(() {});
-    if (loggedIn && vehicleId != null) await _connectRealtime();
+    if (loggedIn && vehicleId != null) { await _connectRealtime(); }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
       if (!loggedIn) return;
@@ -263,7 +263,7 @@ class _HomePageState extends State<HomePage> {
         final lat = (event['latitude'] as num?)?.toDouble();
         final lng = (event['longitude'] as num?)?.toDouble();
         // Realtime payloads are untrusted input: validate before constructing LatLng.
-        if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+        if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
         final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
         if (id != null) {
           if (!seenEvents.add(id)) return;

@@ -238,6 +238,10 @@ export default {
     const origin = request.headers.get("Origin") || "";
     const headers = cors(origin, env);
     const url = new URL(request.url);
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    if (Number.isFinite(contentLength) && contentLength > 65536) {
+      return json({ message: "Request body too large (maximum 64 KiB)" }, 413, headers);
+    }
     if (origin && !allowedOrigins(env).includes(origin)) {
       return json({ status: "error", message: "Origin not allowed" }, 403, headers);
     }

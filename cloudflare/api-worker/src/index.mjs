@@ -1,95 +1,99 @@
+import { Container } from "@cloudflare/containers";
+import { env } from "cloudflare:workers";
+
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://tadjojo.github.io",
-  "https://darb-gps-web.onrender.com",
   "https://darb-gps-web-2026.tadjojo.workers.dev",
 ];
 
-function allowedOrigins(env) {
+function allowedOrigins() {
   return (env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","))
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+    .split(",").map((value) => value.trim()).filter(Boolean);
 }
 
-function corsHeaders(origin, env) {
+function corsHeaders(origin) {
   const headers = new Headers({
     "Vary": "Origin",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, X-Requested-With",
     "Access-Control-Max-Age": "86400",
   });
-
-  if (origin && allowedOrigins(env).includes(origin)) {
+  if (origin && allowedOrigins().includes(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
   }
   return headers;
 }
 
+export class DarbApiContainer extends Container {
+  defaultPort = 3000;
+  sleepAfter = "10m";
+  envVars = {
+    NODE_ENV: "production",
+    DATABASE_URL: env.DATABASE_URL,
+    DATABASE_CA_CERT: env.DATABASE_CA_CERT,
+    DB_POOL_MAX: env.DB_POOL_MAX || "5",
+    DB_IDLE_TIMEOUT_MS: env.DB_IDLE_TIMEOUT_MS || "30000",
+    DB_CONNECTION_TIMEOUT_MS: env.DB_CONNECTION_TIMEOUT_MS || "10000",
+    SUPABASE_URL: env.SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+    CORS_ORIGINS: env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","),
+  };
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, workerEnv) {
     const origin = request.headers.get("Origin") || "";
-    const cors = corsHeaders(origin, env);
+    const cors = corsHeaders(origin);
+    const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
-      if (origin && !allowedOrigins(env).includes(origin)) {
+      if (origin && !allowedOrigins().includes(origin)) {
         return new Response("Origin not allowed", { status: 403, headers: cors });
       }
       return new Response(null, { status: 204, headers: cors });
     }
 
-    if (origin && !allowedOrigins(env).includes(origin)) {
+    if (origin && !allowedOrigins().includes(origin)) {
       return new Response("Origin not allowed", { status: 403, headers: cors });
     }
 
-    if (!env.API_ORIGIN) {
-      return new Response(JSON.stringify({
-        status: "misconfigured",
-        message: "API_ORIGIN is not configured",
-      }), {
-        status: 503,
-        headers: { ...Object.fromEntries(cors), "Content-Type": "application/json; charset=utf-8" },
-      });
+    if (url.pathname === "/api/v1/health/live" && request.method === "GET") {
+      const container = workerEnv.DARB_API.get("primary");
+      try {
+        const response = await container.fetch(request);
+        const headers = new Headers(response.headers);
+        for (const [key, value] of cors) headers.set(key, value);
+        headers.set("X-DARB-Edge", "cloudflare-containers");
+        return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+      } catch {
+        return new Response(JSON.stringify({ status: "starting", service: "darb-gps-api" }), {
+          status: 503,
+          headers: { ...Object.fromEntries(cors), "Content-Type": "application/json; charset=utf-8", "Retry-After": "5" },
+        });
+      }
     }
 
-    const incoming = new URL(request.url);
-    const upstream = new URL(env.API_ORIGIN);
-    upstream.pathname = incoming.pathname;
-    upstream.search = incoming.search;
-
-    const headers = new Headers(request.headers);
-    headers.delete("host");
-    headers.delete("origin");
-    headers.delete("cf-connecting-ip");
-    headers.delete("x-forwarded-for");
-
-    let upstreamResponse;
+    const container = workerEnv.DARB_API.get("primary");
     try {
-      upstreamResponse = await fetch(new Request(upstream.toString(), {
-        method: request.method,
+      const response = await container.fetch(request);
+      const headers = new Headers(response.headers);
+      for (const [key, value] of cors) headers.set(key, value);
+      headers.set("X-DARB-Edge", "cloudflare-containers");
+      headers.delete("server");
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
         headers,
-        body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-        redirect: "manual",
-      }));
+      });
     } catch {
       return new Response(JSON.stringify({
-        status: "upstream-unavailable",
-        message: "DARB API upstream is temporarily unavailable",
+        status: "container-unavailable",
+        message: "DARB API container is starting or temporarily unavailable",
       }), {
-        status: 502,
-        headers: { ...Object.fromEntries(cors), "Content-Type": "application/json; charset=utf-8" },
+        status: 503,
+        headers: { ...Object.fromEntries(cors), "Content-Type": "application/json; charset=utf-8", "Retry-After": "5" },
       });
     }
-
-    const responseHeaders = new Headers(upstreamResponse.headers);
-    for (const [key, value] of cors) responseHeaders.set(key, value);
-    responseHeaders.set("X-DARB-Edge", "cloudflare-workers");
-    responseHeaders.delete("server");
-
-    return new Response(upstreamResponse.body, {
-      status: upstreamResponse.status,
-      statusText: upstreamResponse.statusText,
-      headers: responseHeaders,
-    });
   },
 };

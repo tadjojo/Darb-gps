@@ -24,3 +24,21 @@ test("rejects requests declaring a body larger than 64 KiB", async () => {
   assert.equal(response.status, 413);
   assert.match((await response.json()).message, /64 KiB/);
 });
+
+test("rejects an oversized streamed body even without Content-Length", async () => {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(65537));
+      controller.close();
+    },
+  });
+  const request = new Request("https://worker.test/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: stream,
+    duplex: "half",
+  });
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 413);
+  assert.match((await response.json()).message, /64 KiB/);
+});

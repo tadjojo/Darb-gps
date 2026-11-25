@@ -1,4 +1,3 @@
-
 import {
   Global,
   Inject,
@@ -33,26 +32,17 @@ class DatabaseShutdown implements OnApplicationShutdown {
       useFactory: (config: ConfigService): Pool =>
         new Pool({
           connectionString: config.getOrThrow<string>('DATABASE_URL'),
-          max: config.get<number>('DB_POOL_MAX', 10),
-          idleTimeoutMillis: config.get<number>(
-            'DB_IDLE_TIMEOUT_MS',
-            30000,
-          ),
-          connectionTimeoutMillis: config.get<number>(
-            'DB_CONNECTION_TIMEOUT_MS',
-            5000,
-          ),
+          max: config.get<number>('DB_POOL_MAX', 5),
+          idleTimeoutMillis: config.get<number>('DB_IDLE_TIMEOUT_MS', 30000),
+          connectionTimeoutMillis: config.get<number>('DB_CONNECTION_TIMEOUT_MS', 10000),
           application_name: 'darb-gps-api',
-          ssl:
-  config.get<string>('NODE_ENV') === 'production'
-    ? {
-        ca: readFileSync(
-          '/etc/secrets/prod-supabase.cer',
-          'utf8',
-        ),
-        rejectUnauthorized: true,
-      }
-    : undefined,
+          ssl: config.get<string>('NODE_ENV') === 'production'
+            ? {
+                ca: config.get<string>('DATABASE_CA_CERT') ||
+                  readFileSync('/etc/secrets/prod-supabase.cer', 'utf8'),
+                rejectUnauthorized: true,
+              }
+            : undefined,
         }),
     },
     DatabaseShutdown,

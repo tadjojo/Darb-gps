@@ -17,19 +17,19 @@ class DarbClient {
       _baseUrl = defaultApiBaseUrl;
       await storage.write(key: 'api_base_url', value: _baseUrl!);
     } else {
-      _baseUrl = _normalizeBaseUrl(saved);
+      _baseUrl = normalizeBaseUrl(saved, allowLocalHttp: kDebugMode);
     }
     return _baseUrl!;
   }
 
-  String _normalizeBaseUrl(String value) {
+  static String normalizeBaseUrl(String value, {bool allowLocalHttp = false}) {
     final normalized = value.trim().replaceAll(RegExp(r'/+$'), '');
     final uri = Uri.tryParse(normalized);
     if (uri == null || !uri.hasAuthority || uri.host.isEmpty ||
         uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
       throw ArgumentError('API URL must be a valid HTTPS origin');
     }
-    final isLocalHttp = kDebugMode && uri.scheme == 'http' &&
+    final isLocalHttp = allowLocalHttp && uri.scheme == 'http' &&
         (uri.host == 'localhost' || uri.host == '10.0.2.2' ||
          uri.host == '127.0.0.1' || uri.host.startsWith('192.168.') ||
          uri.host.startsWith('10.'));
@@ -43,7 +43,7 @@ class DarbClient {
   }
 
   Future<void> setBaseUrl(String value) async {
-    _baseUrl = _normalizeBaseUrl(value);
+    _baseUrl = normalizeBaseUrl(value, allowLocalHttp: kDebugMode);
     await storage.write(key: 'api_base_url', value: _baseUrl);
   }
 

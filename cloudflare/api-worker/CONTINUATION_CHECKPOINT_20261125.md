@@ -36,3 +36,9 @@ CI artifact generated for the branch head. Architecture-specific APKs are produc
 - Added an early request declared-size guard: requests with Content-Length above 64 KiB receive HTTP 413.
 - Added dedicated tests for headers and the size guard. CI is pending for head commit `81e863b0f0e92e7f5f902cf8659cf68cc99519d4` at time of checkpoint.
 - The size guard relies on Content-Length; streaming body enforcement for requests that omit or misreport it is still a future hardening item.
+
+## Follow-up security review
+- Corrected the Content-Security-Policy header to use valid quoted `'none'` directives in both preflight and JSON responses.
+- Updated the security test to assert the exact restrictive CSP header.
+- Current CI for commit `dd25752bcaafd925960cc2eff8632c6f9df4e1dc`: Worker validation in progress, Android in progress, iOS queued, smoke test passed.
+- Earlier four Cloudflare Git service build checks remain failures (`darb-gps-2026`, `darb-gps-new`, `darb-gps`, `darb-gps-web-2026`). Their protected build logs still need to be inspected by the account owner.

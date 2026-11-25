@@ -62,3 +62,27 @@ test("login validates required fields before contacting Supabase", async () => {
   }), env);
   assert.equal(res.status, 400);
 });
+
+
+test("logout requests Supabase local-session sign-out and forwards bearer", async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = "";
+  let calledAuthorization = "";
+  globalThis.fetch = async (input, init = {}) => {
+    calledUrl = String(input);
+    calledAuthorization = new Headers(init.headers).get("Authorization") || "";
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer user-access-token" },
+      body: JSON.stringify({ refreshToken: "refresh-token" }),
+    }), env);
+    assert.equal(res.status, 204);
+    assert.equal(new URL(calledUrl).searchParams.get("scope"), "local");
+    assert.equal(calledAuthorization, "Bearer user-access-token");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> {
     deviceId = await _storage.read(key: 'device_id');
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
-    if (mounted) setState(() {});
+    if (mounted) { setState(() {});
     if (loggedIn && vehicleId != null) { await _connectRealtime(); }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
@@ -117,7 +117,7 @@ class _HomePageState extends State<HomePage> {
             loggedIn = false;
             liveConnected = false;
             message = tr('انتهت جلسة الدخول؛ يرجى تسجيل الدخول مجدداً', 'Your session expired; please sign in again');
-          });
+          }); }
         }
       } catch (_) {
         // A temporary network failure must not crash the timer or erase a valid session.
@@ -281,7 +281,7 @@ class _HomePageState extends State<HomePage> {
       if (data == null) return;
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
-      if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+      if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
       if (mounted) setState(() => position = LatLng(lat, lng));
     } catch (_) { /* REST refresh is retried on the next reconnect/manual action. */ }
   }

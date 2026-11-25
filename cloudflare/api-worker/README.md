@@ -21,9 +21,10 @@ Configure these in Worker Settings, not in source control:
 
 - `SUPABASE_URL`: project HTTPS URL
 - `SUPABASE_PUBLISHABLE_KEY`: Supabase publishable/anon key (not a service-role secret)
+- `SUPABASE_SERVICE_ROLE_KEY`: **required only for GPS hardware credential-based ingestion/protocol adapters**. Keep as a Cloudflare secret; it is never returned to clients. This key grants elevated database/API access.
 - `ALLOWED_ORIGINS`: comma-separated approved browser origins; mobile clients without Origin are supported
 
-No Supabase service-role key is required or should be added for the current auth-only routes.
+Auth and user API routes use the caller's JWT. Hardware tracker ingestion currently uses the service-role key in server-side Worker RPC calls; do not use this key in the Flutter app or web client.
 
 ## Local checks
 
@@ -40,7 +41,7 @@ Once all required routes and integration tests are ready, authenticate Wrangler 
 
 ```bash
 npx wrangler login
-npx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+npx wrangler secret put SUPABASE_PUBLISHABLE_KEY\nnpx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler deploy
 ```
 

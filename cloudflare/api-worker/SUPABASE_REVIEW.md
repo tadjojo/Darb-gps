@@ -50,3 +50,8 @@ The staged scoped location-history RPC was tested in a rollback-only transaction
 ## Hardware RPC verification
 
 Tracker provisioning, rotation, revocation, profile lookup, JSON telemetry, duplicate-event handling, and GT06 heartbeat were exercised in rollback-only transactions under the authenticated/service roles. Profile lookup and tracker protocol credential checks were also validated; no test organization/device/location rows remain. The Worker adapter tests validate NMEA RMC checksum/time/coordinate normalization and GT06 frame CRC/location/timezone normalization. All migrations remain staged, not applied.
+
+
+## Vehicle-membership RPC verification
+
+The staged membership RPC migration was syntax-tested and the add-member RPC was exercised under the authenticated role in a rollback-only transaction. A read-only verification confirmed the test organization was removed by rollback. Membership revocation and role-denial behavior remains covered by Worker mock tests; it has not been applied to live schema.

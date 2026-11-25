@@ -86,3 +86,43 @@ test("logout requests Supabase local-session sign-out and forwards bearer", asyn
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("login proxies email credentials to Supabase and maps tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  let url = "";
+  let posted = {};
+  globalThis.fetch = async (input, init = {}) => {
+    url = String(input);
+    posted = JSON.parse(init.body || "{}");
+    return new Response(JSON.stringify({ access_token: "access", refresh_token: "refresh" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "person@example.com", password: "secret" }),
+    }), env);
+    assert.equal(res.status, 200);
+    assert.match(url, /\/auth\/v1\/token\?grant_type=password$/);
+    assert.deepEqual(posted, { email: "person@example.com", password: "secret" });
+    assert.deepEqual(await res.json(), { accessToken: "access", refreshToken: "refresh" });
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("refresh proxies token to Supabase and maps rotated tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  let posted = {};
+  globalThis.fetch = async (_input, init = {}) => {
+    posted = JSON.parse(init.body || "{}");
+    return new Response(JSON.stringify({ access_token: "new-access", refresh_token: "new-refresh" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/refresh", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: "old-refresh" }),
+    }), env);
+    assert.equal(res.status, 200);
+    assert.deepEqual(posted, { refresh_token: "old-refresh" });
+    assert.deepEqual(await res.json(), { accessToken: "new-access", refreshToken: "new-refresh" });
+  } finally { globalThis.fetch = originalFetch; }
+});

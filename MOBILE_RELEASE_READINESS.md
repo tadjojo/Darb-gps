@@ -14,6 +14,9 @@
 - Production API URLs must use HTTPS.
 - Plain HTTP is accepted only in debug builds for localhost, Android emulator loopback, and private development LAN addresses.
 - API URLs containing user-info, query parameters, or fragments are rejected.
+- Realtime and latest-location coordinates are range-checked and finite-checked before map objects are created.
+- Realtime event de-duplication is capped at 1,000 IDs to prevent unbounded memory growth during long sessions.
+- Refresh-token timer failures are handled without crashing the timer or erasing a still-valid session; rejected refresh credentials return the user to sign-in.
 - Access and refresh tokens continue to use platform secure storage.
 - Location fixes are validated for coordinate bounds, accuracy, freshness and monotonic timestamps before queueing.
 - Each queued fix retains its UUID during retries so server-side idempotency can reject duplicate submissions.
@@ -54,4 +57,4 @@
 
 ## Honest status
 
-The repository contains an existing Flutter mobile alpha and CI workflows. The changes above harden endpoint selection and CI configuration; they do not constitute a completed, signed, device-tested or store-approved release. No release artifact or production deployment is claimed until CI and physical-device acceptance tests pass.
+The repository contains an existing Flutter mobile alpha and CI workflows. Recent changes harden endpoint selection, GPS event validation, event de-duplication memory, and refresh-token error handling. Important: the existing Production API Smoke Test workflow still targets the legacy Render URL; its green result is not evidence that the Cloudflare API is deployed or healthy. The mobile app's Cloudflare URL is a target configuration only until the free-plan Workers API replacement is deployed and verified. These changes do not constitute a completed, signed, device-tested or store-approved release. No release artifact or production deployment is claimed until CI and physical-device acceptance tests pass.

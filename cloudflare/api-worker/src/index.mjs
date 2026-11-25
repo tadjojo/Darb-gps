@@ -25,13 +25,16 @@ function cors(origin, env) {
 function json(data, status, headers) {
   const h = new Headers(headers || {});
   h.set("Content-Type", "application/json; charset=utf-8");
+  h.set("Cache-Control", "no-store");
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 
+function supabaseConfigured(env) {
+  return Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY);
+}
+
 async function supabaseAuth(env, path, payload) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error("Supabase settings are not configured");
-  }
+  if (!supabaseConfigured(env)) throw new Error("Supabase environment is not configured");
   const response = await fetch(new URL(path, env.SUPABASE_URL), {
     method: "POST",
     headers: {
@@ -53,8 +56,17 @@ export default {
       return json({ status: "error", message: "Origin not allowed" }, 403, headers);
     }
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
-    if (url.pathname === "/api/v1/health/live" || url.pathname === "/api/v1/health/ready") {
-      return json({ status: "ok", service: "darb-gps-api", runtime: "cloudflare-worker", freePlanCompatible: true }, 200, headers);
+    if (url.pathname === "/api/v1/health/live" && request.method === "GET") {
+      return json({ status: "ok", service: "darb-gps-api", runtime: "cloudflare-worker" }, 200, headers);
+    }
+    if (url.pathname === "/api/v1/health/ready" && request.method === "GET") {
+      const configured = supabaseConfigured(env);
+      return json({
+        status: configured ? "ready" : "not_ready",
+        service: "darb-gps-api",
+        supabaseConfigured: configured,
+        note: "Readiness checks configuration only; no database connectivity test is performed.",
+      }, configured ? 200 : 503, headers);
     }
 
     try {
@@ -65,9 +77,7 @@ export default {
         if (!identifier || typeof password !== "string" || !password) {
           return json({ message: "يرجى إدخال البريد الإلكتروني أو الهاتف وكلمة المرور" }, 400, headers);
         }
-        const credentials = identifier.includes("@")
-          ? { email: identifier, password }
-          : { phone: identifier, password };
+        const credentials = identifier.includes("@") ? { email: identifier, password } : { phone: identifier, password };
         const { response, body: auth } = await supabaseAuth(env, "/auth/v1/token?grant_type=password", credentials);
         if (!response.ok) return json({ message: "بيانات تسجيل الدخول غير صحيحة" }, 401, headers);
         return json({ accessToken: auth.access_token, refreshToken: auth.refresh_token }, 200, headers);

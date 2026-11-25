@@ -23,7 +23,7 @@ CI validates Node tests and Wrangler bundle.
 
 Prototype routes now exist for create organization, create vehicle, and list vehicles using transaction-safe RPC functions. RPC SQL was syntax-tested against the live project in a transaction that was rolled back. Migration is staged only and not applied. Remaining: review/apply RPC migration, add real-project integration tests and membership add/revoke routes. Schema and role rules were verified read-only against the connected project.
 
-## Stage 2 — Mobile tracking (prototype routes implemented; SQL migration staged)
+## Stage 2 — Mobile tracking and history (prototype routes implemented; SQL migrations staged)
 
 - `POST /api/v1/tracking/devices/enroll-mobile`
 - `GET /api/v1/tracking/devices/vehicle/:vehicleId`
@@ -34,7 +34,7 @@ Prototype routes now exist for create organization, create vehicle, and list veh
 - `GET /api/v1/tracking/vehicles/:vehicleId/trip-route`
 - `GET /api/v1/tracking/vehicles/:vehicleId/stops`
 
-Prototype routes now exist for mobile enrollment, device listing, location ingestion, and latest location. SQL RPC migration has been tested under simulated authenticated role in a rollback-only transaction. Remaining: history/trips/route/stops, alerts evaluation and realtime fan-out; location ingestion is not yet wired to Socket.IO/realtime. Migrations are staged, not applied.
+Prototype routes now exist for mobile enrollment, device listing, location ingestion, latest location, history, trips, trip route, and stop detection. The location-history RPC and mobile RPCs were tested under simulated authenticated role in rollback-only transactions. Remaining: alerts evaluation and realtime fan-out; location ingestion is not yet wired to Socket.IO/realtime. Migrations are staged, not applied.
 
 ## Stage 3 — Hardware tracking device administration
 

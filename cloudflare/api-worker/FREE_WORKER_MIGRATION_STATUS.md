@@ -7,16 +7,17 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Readiness endpoint checks whether Supabase settings exist; it does not test DB connectivity.
 - Supabase Auth login, refresh, and logout proxy scaffolding.
 - Organization creation, vehicle creation, and vehicle listing route prototypes through authenticated Supabase RPCs.
+- Mobile enrollment, device listing, location ingestion, and latest-location route prototypes through authenticated RPCs.
 - Transaction-safe SQL RPC migration is staged for these operations; syntax checked against the live project in a transaction that was rolled back (no persistent schema change).
 - Authenticated `/api/v1/auth/me` endpoint validates bearer tokens through Supabase Auth and returns a minimal profile (id/email/phone/role only).
 - Origin allow-list CORS.
 - Tests for health/readiness, CORS, login input validation, Supabase auth proxy happy-path (login/refresh/logout), and explicit 501 responses for unported routes.
 - Supabase logout uses local-session scope and is tested to forward the access-token bearer.
-- Latest Worker validation passed on commit `f091f596` (22 Node tests and Wrangler dry-run). Subsequent org/vehicle code was tested and passed on commit `f091f596`; PR branch includes newer documentation/migration commits.
+- Latest Worker validation passed on commit `f091f596` (22 Node tests and Wrangler dry-run); mobile routes are now added with additional CI tests pending. Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
 - No Cloudflare Containers dependency; no secrets or placeholder credentials in Wrangler config.
 
 ## Not migrated
-Organizations, vehicles, memberships, GPS mobile tracking, hardware device credentials/protocols, alerts, realtime, and admin. Unported routes return 501.
+Vehicle membership add/revoke, history/trips/stops, GPS hardware device credentials/protocols, alert evaluation and alert API, realtime, and admin. Unported routes return 501.
 
 ## Live project review
 - Supabase project was read-only inspected: schema and RLS roles confirmed; no persistent changes were made.

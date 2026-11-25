@@ -158,7 +158,16 @@ class DarbClient {
     final response = await authorized('GET', '/api/v1/tracking/devices/vehicle/$vehicleId');
     final value = _decode(response);
     final rows = value['data'] is List ? value['data'] as List : <dynamic>[];
-    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+    return rows.whereType<Map>().map((row) {
+      final device = Map<String, dynamic>.from(row);
+      device['device_label'] = device['label'] ?? (device['device_type'] == 'mobile' ? 'Mobile' : 'GPS Tracker');
+      device['model_name'] = device['model'];
+      device['last_protocol'] = device['protocol'];
+      final lastSeenValue = device['last_seen_at'];
+      final lastSeen = lastSeenValue is String ? DateTime.tryParse(lastSeenValue)?.toLocal() : null;
+      device['connectionStatus'] = device['status'] != 'active' ? device['status'] : lastSeen == null ? 'never_connected' : DateTime.now().difference(lastSeen).inMinutes <= 2 ? 'online' : 'offline';
+      return device;
+    }).toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> listTrips(String vehicleId, {required DateTime from, required DateTime to, int limit = 50}) async {

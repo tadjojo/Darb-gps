@@ -22,3 +22,9 @@ test("alert acknowledge and resolve routes invoke corresponding RPCs",async()=>{
  globalThis.fetch=async(input,init={})=>{target=String(input);args=JSON.parse(init.body||"{}");return new Response(JSON.stringify({id:alert,status:"resolved"}),{status:200});};
  try{const ack=await worker.fetch(new Request(`https://worker.test/api/v1/alerts/${alert}/acknowledge`,{method:"PATCH",headers:auth}),env);assert.equal(ack.status,200);assert.match(target,/darb_api_acknowledge_alert$/);assert.deepEqual(args,{p_alert_id:alert});const res=await worker.fetch(new Request(`https://worker.test/api/v1/alerts/${alert}/resolve`,{method:"PATCH",headers:auth}),env);assert.equal(res.status,200);assert.match(target,/darb_api_resolve_alert$/);assert.deepEqual(args,{p_alert_id:alert});}finally{globalThis.fetch=old;}
 });
+
+
+test("geofence alert rule validates coordinates radius and passes config",async()=>{
+ const old=globalThis.fetch;let args={};globalThis.fetch=async(_i,init={})=>{args=JSON.parse(init.body||"{}");return new Response(JSON.stringify({id:"fence-1",rule_type:"geofence"}),{status:200});};
+ try{const invalid=await worker.fetch(new Request("https://worker.test/api/v1/alerts/rules",{method:"POST",headers:auth,body:JSON.stringify({vehicleId:vehicle,type:"geofence",name:"Fence",config:{latitude:100,longitude:35,radiusMeters:50}})}),env);assert.equal(invalid.status,400);const res=await worker.fetch(new Request("https://worker.test/api/v1/alerts/rules",{method:"POST",headers:auth,body:JSON.stringify({vehicleId:vehicle,type:"geofence",name:"Fence",config:{latitude:31.95,longitude:35.91,radiusMeters:100}})}),env);assert.equal(res.status,201);assert.deepEqual(args.p_config,{latitude:31.95,longitude:35.91,radiusMeters:100});assert.equal(args.p_type,"geofence");}finally{globalThis.fetch=old;}
+});

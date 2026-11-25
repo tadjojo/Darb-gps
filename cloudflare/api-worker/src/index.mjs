@@ -108,8 +108,12 @@ async function supabaseRpc(env, functionName, args, authorization) {
 
 
 async function hashTrackerBearer(authorization) {
-  if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) return null;
-  const token = authorization.replace(/^Bearer\\s+/i, "").trim();
+  if (!authorization) return null;
+  const normalized = authorization.trim();
+  const separator = normalized.indexOf(" ");
+  if (separator <= 0 || normalized.slice(0, separator).toLowerCase() !== "bearer") return null;
+  const token = normalized.slice(separator).trim();
+  if (!token || token.includes(" ")) return null;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }

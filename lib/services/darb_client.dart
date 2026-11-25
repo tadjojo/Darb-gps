@@ -1,20 +1,50 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 class DarbClient {
   DarbClient(this.storage);
+  static const String defaultApiBaseUrl = 'https://darb-gps-new.tadjojo.workers.dev';
   final FlutterSecureStorage storage;
   String? _baseUrl;
 
-  Future<String> get baseUrl async => _baseUrl ??= (await storage.read(key: 'api_base_url') ?? 'https://darb-gps-x.onrender.com').replaceAll(RegExp(r'/+$'), '');
-  Future<void> setBaseUrl(String value) async {
-    final normalized = value.trim().replaceAll(RegExp(r'/+$'), '');
-    if (!normalized.startsWith('https://') && !normalized.startsWith('http://')) {
-      throw ArgumentError('API URL must start with http:// or https://');
+  Future<String> get baseUrl async {
+    if (_baseUrl != null) return _baseUrl!;
+    final saved = await storage.read(key: 'api_base_url');
+    // Migrate the old Render default without overwriting a deliberate custom endpoint.
+    if (saved == null || saved.contains('darb-gps-x.onrender.com')) {
+      _baseUrl = defaultApiBaseUrl;
+      await storage.write(key: 'api_base_url', value: _baseUrl!);
+    } else {
+      _baseUrl = _normalizeBaseUrl(saved);
     }
-    _baseUrl = normalized;
-    await storage.write(key: 'api_base_url', value: normalized);
+    return _baseUrl!;
+  }
+
+  String _normalizeBaseUrl(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !uri.hasAuthority || uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
+      throw ArgumentError('API URL must be a valid HTTPS origin');
+    }
+    final isLocalHttp = kDebugMode && uri.scheme == 'http' &&
+        (uri.host == 'localhost' || uri.host == '10.0.2.2' ||
+         uri.host == '127.0.0.1' || uri.host.startsWith('192.168.') ||
+         uri.host.startsWith('10.'));
+    if (uri.scheme != 'https' && !isLocalHttp) {
+      throw ArgumentError('Production API connections must use HTTPS');
+    }
+    if (uri.scheme != 'https' && uri.scheme != 'http') {
+      throw ArgumentError('Unsupported API URL scheme');
+    }
+    return normalized;
+  }
+
+  Future<void> setBaseUrl(String value) async {
+    _baseUrl = _normalizeBaseUrl(value);
+    await storage.write(key: 'api_base_url', value: _baseUrl);
   }
 
   Future<Map<String, dynamic>> login(String identifier, String password) async {
@@ -73,11 +103,11 @@ class DarbClient {
   }
 
   Future<http.Response> authorized(String method, String path, {Map<String, dynamic>? body}) async {
-    await baseUrl;
+    final endpoint = await baseUrl;
     var token = await storage.read(key: 'access_token');
     if (token == null) throw StateError('سجّل الدخول أولاً');
     Future<http.Response> send(String t) {
-      final uri = Uri.parse('${_baseUrl ?? 'http://10.0.2.2:3000'}$path');
+      final uri = Uri.parse('$endpoint$path');
       final headers = {'Authorization': 'Bearer $t', 'Content-Type': 'application/json'};
       final payload = body == null ? null : jsonEncode(body);
       switch (method) {

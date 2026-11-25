@@ -29,7 +29,7 @@ test("GT06 HTTPS adapter validates frame CRC and applies configured UTC offset",
 test("GT06 adapter rejects a corrupted CRC frame",async()=>{
  const old=globalThis.fetch;let calls=0;
  globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify({protocol:"gt06",timezone_offset_minutes:180}),{status:200});};
- try{const frame=gt06Frame().slice(0,-4)+"0000"+gt06Frame().slice(-4);const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,400);assert.equal(calls,1);}finally{globalThis.fetch=old;}
+ try{const validFrame=gt06Frame();const frame=validFrame.slice(0,-4)+"0000"+validFrame.slice(-2);const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,400);assert.equal(calls,1);}finally{globalThis.fetch=old;}
 });
 
 test("NMEA adapter rejects credentials enrolled for another protocol",async()=>{

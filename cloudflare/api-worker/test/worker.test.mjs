@@ -1,84 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker from "../src/index.mjs";
+import { readFile } from "node:fs/promises";
 
-const originalFetch = globalThis.fetch;
+const workerSource = await readFile(new URL("../src/index.mjs", import.meta.url), "utf8");
+const config = await readFile(new URL("../wrangler.toml", import.meta.url), "utf8");
 
-test("proxies API health and adds the Cloudflare edge header", async () => {
-  let requested;
-  globalThis.fetch = async (request) => {
-    requested = new URL(request.url);
-    return new Response(JSON.stringify({ status: "ok" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  };
-
-  try {
-    const response = await worker.fetch(new Request(
-      "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live?probe=1",
-      { headers: { Origin: "https://tadjojo.github.io" } },
-    ), {
-      API_ORIGIN: "https://darb-gps-x.onrender.com",
-      ALLOWED_ORIGINS: "https://tadjojo.github.io",
-    });
-
-    assert.equal(response.status, 200);
-    assert.equal(requested.origin, "https://darb-gps-x.onrender.com");
-    assert.equal(requested.pathname, "/api/v1/health/live");
-    assert.equal(requested.search, "?probe=1");
-    assert.equal(response.headers.get("X-DARB-Edge"), "cloudflare-workers");
-    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://tadjojo.github.io");
-    assert.deepEqual(await response.json(), { status: "ok" });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+test("Cloudflare Worker routes requests to the native API container", () => {
+  assert.match(workerSource, /from "@cloudflare\/containers"/);
+  assert.match(workerSource, /class DarbApiContainer extends Container/);
+  assert.match(workerSource, /workerEnv\.DARB_API\.get\("primary"\)/);
+  assert.match(workerSource, /container\.fetch\(request\)/);
+  assert.doesNotMatch(workerSource, /onrender\.com|API_ORIGIN/);
 });
 
-test("answers allowed CORS preflight without contacting the API", async () => {
-  let called = false;
-  globalThis.fetch = async () => { called = true; return new Response(); };
-
-  try {
-    const response = await worker.fetch(new Request(
-      "https://darb-gps-new.tadjojo.workers.dev/api/v1/vehicles",
-      {
-        method: "OPTIONS",
-        headers: {
-          Origin: "https://tadjojo.github.io",
-          "Access-Control-Request-Method": "GET",
-        },
-      },
-    ), {
-      API_ORIGIN: "https://darb-gps-x.onrender.com",
-      ALLOWED_ORIGINS: "https://tadjojo.github.io",
-    });
-
-    assert.equal(response.status, 204);
-    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://tadjojo.github.io");
-    assert.equal(called, false);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+test("Wrangler config builds the existing API Dockerfile on Cloudflare", () => {
+  assert.match(config, /name = "darb-gps-new"/);
+  assert.match(config, /image = "\.\.\/\.\.\/api\/Dockerfile"/);
+  assert.match(config, /image_build_context = "\.\.\/\.\.\/api"/);
+  assert.match(config, /class_name = "DarbApiContainer"/);
+  assert.match(config, /name = "DARB_API"/);
+  assert.doesNotMatch(config, /onrender\.com|API_ORIGIN/);
 });
 
-test("rejects origins not on the allowlist", async () => {
-  const response = await worker.fetch(new Request(
-    "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live",
-    { headers: { Origin: "https://not-allowed.example" } },
-  ), {
-    API_ORIGIN: "https://darb-gps-x.onrender.com",
-    ALLOWED_ORIGINS: "https://tadjojo.github.io",
-  });
-
-  assert.equal(response.status, 403);
-});
-
-test("fails closed when API_ORIGIN is missing", async () => {
-  const response = await worker.fetch(new Request(
-    "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live",
-  ), {});
-
-  assert.equal(response.status, 503);
-  assert.equal((await response.json()).status, "misconfigured");
+test("API container receives only runtime configuration via Cloudflare bindings", () => {
+  assert.match(workerSource, /DATABASE_URL: env\.DATABASE_URL/);
+  assert.match(workerSource, /DATABASE_CA_CERT: env\.DATABASE_CA_CERT/);
+  assert.match(workerSource, /SUPABASE_URL: env\.SUPABASE_URL/);
+  assert.match(workerSource, /SUPABASE_PUBLISHABLE_KEY: env\.SUPABASE_PUBLISHABLE_KEY/);
 });

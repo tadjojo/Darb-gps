@@ -33,6 +33,32 @@ function supabaseConfigured(env) {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY);
 }
 
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function supabaseRpc(env, functionName, args, authorization) {
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, env.SUPABASE_URL), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": env.SUPABASE_PUBLISHABLE_KEY,
+      "Authorization": authorization,
+    },
+    body: JSON.stringify(args),
+  });
+  const data = await response.json().catch(() => null);
+  return { response, data };
+}
+
+
+function rpcErrorStatus(response, data) {
+  if (response.status === 401) return 401;
+  if (response.status === 403 || data?.code === "42501") return 403;
+  if (response.status === 404 || data?.code === "P0002") return 404;
+  if (response.status === 400 || ["22023", "23514"].includes(data?.code)) return 400;
+  return 502;
+}
+
 async function supabaseAuth(env, path, payload) {
   if (!supabaseConfigured(env)) throw new Error("Supabase environment is not configured");
   const response = await fetch(new URL(path, env.SUPABASE_URL), {
@@ -103,6 +129,46 @@ export default {
         return new Response(null, { status: 204, headers });
       }
 
+
+      if (url.pathname === "/api/v1/organizations" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        if (!name || name.length > 150) return json({ message: "Organization name must be 1..150 characters" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_create_organization", { p_name: name }, authorization);
+        if (!response.ok) return json({ message: "Organization creation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 201, headers);
+      }
+
+      const vehicleCreateMatch = url.pathname.match(/^\\/api\\/v1\\/organizations\\/([^/]+)\\/vehicles$/);
+      if (vehicleCreateMatch && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const organizationId = vehicleCreateMatch[1];
+        if (!UUID_RE.test(organizationId)) return json({ message: "Invalid organization ID" }, 400, headers);
+        const body = await request.json().catch(() => null);
+        const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
+        const registrationNumber = typeof body?.registrationNumber === "string" ? body.registrationNumber.trim() : "";
+        if (!displayName || displayName.length > 100 || registrationNumber.length > 30) return json({ message: "Invalid vehicle fields" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_create_vehicle", { p_organization_id: organizationId, p_display_name: displayName, p_registration_number: registrationNumber || null }, authorization);
+        if (!response.ok) return json({ message: "Vehicle creation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 201, headers);
+      }
+
+      const vehicleListMatch = url.pathname.match(/^\\/api\\/v1\\/organizations\\/([^/]+)\\/vehicles$/);
+      if (vehicleListMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const organizationId = vehicleListMatch[1];
+        if (!UUID_RE.test(organizationId)) return json({ message: "Invalid organization ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_list_vehicles", { p_organization_id: organizationId }, authorization);
+        if (!response.ok) return json({ message: "Vehicle list unavailable" }, rpcErrorStatus(response, data), headers);
+        return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
+      }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

@@ -426,7 +426,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final center = position ?? const LatLng(31.9539, 35.9106);
-    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: loggedIn ? vehicleId : null, active: tab == 4, arabic: widget.arabic, position: position), GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: loggedIn ? vehicleId : null, active: tab == 5, arabic: widget.arabic), settingsScreen()];
+    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: loggedIn ? vehicleId : null, active: tab == 4, arabic: widget.arabic, position: position), settingsScreen()];
     return Directionality(textDirection: widget.arabic ? TextDirection.rtl : TextDirection.ltr, child: Scaffold(
       appBar: AppBar(backgroundColor: Colors.white,
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),
@@ -438,7 +438,6 @@ class _HomePageState extends State<HomePage> {
         NavigationDestination(icon: const Icon(Icons.directions_car), label: tr('المركبات', 'Vehicles')),
         NavigationDestination(icon: const Icon(Icons.route), label: tr('الرحلات', 'Trips')),
         NavigationDestination(icon: const Icon(Icons.notifications), label: tr('التنبيهات', 'Alerts')),
-        NavigationDestination(icon: const Icon(Icons.router), label: tr('GPS خارجي', 'GPS devices')),
         NavigationDestination(icon: const Icon(Icons.settings), label: tr('الإعدادات', 'Settings')),
       ]),
     ));
@@ -518,7 +517,7 @@ class _HomePageState extends State<HomePage> {
     Card(child: ListTile(leading: const Icon(Icons.directions_car), title: Text(vehicleId ?? tr('لا توجد مركبة محددة', 'No vehicle selected')), subtitle: Text(deviceId ?? tr('لم يتم اعتماد الهاتف بعد', 'Phone not enrolled')), trailing: IconButton(icon: const Icon(Icons.add_link), onPressed: loggedIn ? _enrollDevice : null))),
     Card(child: ListTile(leading: const Icon(Icons.router), title: Text(tr('أجهزة GPS المسجلة للمركبة', 'GPS devices registered to this vehicle')), subtitle: Text(loadingDevices ? tr('جارٍ تحميل الأجهزة...', 'Loading devices...') : '${registeredDevices.length} ${tr('جهاز', 'device(s)')}'), trailing: IconButton(onPressed: loadingDevices ? null : _loadDevices, icon: const Icon(Icons.refresh)))),
     if (registeredDevices.isEmpty && !loadingDevices) Card(child: ListTile(leading: const Icon(Icons.info_outline), title: Text(tr('لا توجد أجهزة مستقلة مسجلة', 'No independent trackers registered')), subtitle: Text(tr('تظهر هنا الأجهزة التي يعتمدها مسؤول النظام للمركبة', 'Trackers provisioned for this vehicle by an administrator appear here')))),
-    ...registeredDevices.map((device) {
+    ...registeredDevices.where((device) => device['device_type'] != 'gps_tracker').map((device) {
       final isTracker = device['device_type']?.toString() == 'gps_tracker';
       final status = device['connectionStatus']?.toString() ?? 'unknown';
       final online = status == 'online';
@@ -530,6 +529,7 @@ class _HomePageState extends State<HomePage> {
       final details = <String>[if (manufacturer != null && manufacturer.isNotEmpty) manufacturer, if (model != null && model.isNotEmpty) model, if (protocol != null && protocol.isNotEmpty) protocol.toUpperCase(), if (battery is num) '${battery.round()}%'].join(' • ');
       return Card(child: ListTile(leading: Icon(isTracker ? Icons.router : Icons.phone_android, color: online ? Colors.green : Colors.grey), title: Text(label), subtitle: Text('${tr(online ? 'متصل' : status == 'never_connected' ? 'لم يتصل بعد' : 'غير متصل', online ? 'Online' : status == 'never_connected' ? 'Never connected' : 'Offline')}${details.isEmpty ? '' : ' • $details'}'), trailing: Icon(status == 'never_connected' ? Icons.hourglass_empty : online ? Icons.wifi : Icons.wifi_off)));
     }),
+    SizedBox(height: 340, child: GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: loggedIn ? vehicleId : null, active: tab == 2, arabic: widget.arabic)),
   ]);
 
   Widget tripsScreen() => ListView(padding: const EdgeInsets.all(16), children: [

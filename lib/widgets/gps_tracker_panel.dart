@@ -216,7 +216,7 @@ class _GpsTrackerPanelState extends State<GpsTrackerPanel> {
             leading: Icon(Icons.router, color: status == 'online' ? Colors.green : Colors.grey),
             title: Text(name),
             subtitle: Text('${status.toUpperCase()} • $proto • $model${last == null ? '' : ' • $last'}'),
-            trailing: PopupMenuButton<String>(
+            trailing: status == 'revoked' ? const Icon(Icons.block, color: Colors.red) : PopupMenuButton<String>(
               onSelected: (v) { if (v == 'rotate') _rotate(id); if (v == 'revoke') _revoke(id); },
               itemBuilder: (context) => [
                 PopupMenuItem(value: 'rotate', child: Text(tr('تغيير المفتاح', 'Rotate key'))),

@@ -147,7 +147,7 @@ test("auth/me validates bearer with Supabase and returns safe user profile", asy
     assert.equal(res.status, 200);
     assert.match(calledUrl, /\/auth\/v1\/user$/);
     assert.equal(authHeader, "Bearer sample-access");
-    assert.deepEqual(await res.json(), { id: "user-123", email: "test@example.org", phone: null, role: null, userMetadata: { display_name: "Tester" } });
+    assert.deepEqual(await res.json(), { id: "user-123", email: "test@example.org", phone: null, role: null });
   } finally { globalThis.fetch = originalFetch; }
 });
 

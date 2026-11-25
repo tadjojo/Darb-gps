@@ -8,6 +8,10 @@
 - API runtime: the existing NestJS application and `api/Dockerfile`, built and run as a Cloudflare Container. No Render API proxy is used.
 - Device gateway: raw GT06/NMEA TCP is a separate deployment concern. Cloudflare Spectrum Worker-origin TCP requires a custom zone and an eligible paid plan; workers.dev alone is not a public raw-TCP listener.
 
+## Cost requirement
+
+Cloudflare Containers are not included in the Free plan. Running the NestJS API container requires the Workers Paid plan (minimum USD $5/month) plus any usage above the included allowances. The dashboard-only static Worker can remain on the Free plan. Do not enable the API Container if a paid plan is not acceptable.
+
 ## Cloudflare Workers Builds settings for darb-gps-new
 
 Open Workers & Pages:

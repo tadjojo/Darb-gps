@@ -8,7 +8,7 @@ const config = await readFile(new URL("../wrangler.toml", import.meta.url), "utf
 test("Cloudflare Worker routes requests to the native API container", () => {
   assert.match(workerSource, /from "@cloudflare\/containers"/);
   assert.match(workerSource, /class DarbApiContainer extends Container/);
-  assert.match(workerSource, /workerEnv\.DARB_API\.get\("primary"\)/);
+  assert.match(workerSource, /getContainer\(workerEnv\.DARB_API\)/);
   assert.match(workerSource, /container\.fetch\(request\)/);
   assert.doesNotMatch(workerSource, /onrender\.com|API_ORIGIN/);
 });

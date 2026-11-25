@@ -590,7 +590,7 @@ export default {
         return json(data, 200, headers);
       }
 
-      if (url.pathname === "/api/v1/alerts" && request.method === "GET") {
+      // Alert endpoints use authenticated, narrowly granted RPCs; private alert tables remain closed to REST.\n      if (url.pathname === "/api/v1/alerts" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
         if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);

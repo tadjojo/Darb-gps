@@ -95,7 +95,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         const token = request.headers.get("Authorization") || "";
         if (!token.startsWith("Bearer ") || !body?.refreshToken) return json({ message: "Authentication required" }, 401, headers);
-        const response = await fetch(new URL("/auth/v1/logout", env.SUPABASE_URL), {
+        const response = await fetch(new URL("/auth/v1/logout?scope=local", env.SUPABASE_URL), {
           method: "POST",
           headers: { "apikey": env.SUPABASE_PUBLISHABLE_KEY, "Authorization": token },
         });

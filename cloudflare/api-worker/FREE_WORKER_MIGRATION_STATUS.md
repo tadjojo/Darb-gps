@@ -8,7 +8,8 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Supabase Auth login, refresh, and logout proxy scaffolding.
 - Organization creation, vehicle creation/listing, and vehicle membership add/revoke route prototypes through authenticated Supabase RPCs.
 - Mobile enrollment, device listing, location ingestion, latest-location, history, trips, trip route, and stops through authenticated RPCs.
-- GPS hardware tracker enrollment, one-time credential generation, credential rotation, revocation, JSON ingest, GT06 heartbeat, and HTTPS GT06/NMEA adapters. Hardware ingestion is service-role RPC-backed; the service-role key is a Cloudflare-only secret.
+- GPS hardware tracker enrollment, one-time credential generation, credential rotation, revocation, JSON ingest, GT06 heartbeat, and HTTPS GT06/NMEA adapters.
+- Alert list, acknowledge/resolve, rule list/create routes; speed-limit and geofence event evaluation; tamper alerts; offline alert recovery. Hardware ingestion is service-role RPC-backed; the service-role key is a Cloudflare-only secret.
 - Transaction-safe SQL RPC migration is staged for these operations; syntax checked against the live project in a transaction that was rolled back (no persistent schema change).
 - Authenticated `/api/v1/auth/me` endpoint validates bearer tokens through Supabase Auth and returns a minimal profile (id/email/phone/role only).
 - Origin allow-list CORS.

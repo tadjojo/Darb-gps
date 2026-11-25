@@ -10,7 +10,7 @@ test("API responses include baseline security headers", async () => {
   assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
   assert.equal(response.headers.get("Referrer-Policy"), "no-referrer");
   assert.equal(response.headers.get("X-Frame-Options"), "DENY");
-  assert.match(response.headers.get("Content-Security-Policy") || "", /default-src none/);
+  assert.equal(response.headers.get("Content-Security-Policy"), "default-src 'none'; frame-ancestors 'none';");
   assert.equal(response.headers.get("Cache-Control"), "no-store");
 });
 

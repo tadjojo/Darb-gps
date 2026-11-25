@@ -2,7 +2,7 @@
 
 ## Current migration stage
 
-- The static dashboard remains on the currently verified GitHub Pages URL until the Cloudflare Pages project is connected and tested.
+- The static dashboard is served by the Cloudflare Worker `darb-gps-web-2026` at `https://darb-gps-web-2026.tadjojo.workers.dev/`.
 - `cloudflare/api-worker` adds a Cloudflare Workers edge endpoint that forwards `/api/v1/*` requests to the existing Render API.
 - Supabase remains the system of record for PostgreSQL and authentication.
 - The GT06/NMEA TCP device gateway is not moved to Workers: GPS trackers require publicly reachable TCP listeners, which a normal Workers HTTP Worker does not provide.
@@ -16,13 +16,13 @@
 5. In build settings, set **Build command** to `npm install` (or leave it blank if Cloudflare offers an install-only default).
 6. Set **Deploy command** to `npx wrangler deploy`.
 7. If there is a separate **Build output directory**, leave it blank; this is a Worker deployment, not a static Pages build.
-8. Confirm the Worker name is `darb-gps-api-edge` and deploy.
+8. Confirm the Worker name is `darb-gps-new` and deploy.
 
 **Do not use `npm run build`, `nest build`, or `api` as the root directory for this Worker.** Those settings try to build the NestJS API and cause unrelated TypeScript errors. Worker source is in `cloudflare/api-worker/src/index.mjs`.
 
 Test after deployment:
-- `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live`
-- `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/ready`
+- `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live`
+- `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/ready`
 
 Do not change the dashboard's API base URL until both health checks pass and authenticated smoke tests pass through the Worker.
 

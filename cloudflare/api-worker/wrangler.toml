@@ -1,8 +1,25 @@
 name = "darb-gps-new"
 main = "src/index.mjs"
-compatibility_date = "2026-11-24"
+compatibility_date = "2026-11-25"
 workers_dev = true
 
+[[containers]]
+class_name = "DarbApiContainer"
+image = "../../api/Dockerfile"
+image_build_context = "../../api"
+max_instances = 1
+instance_type = "basic"
+
+[[durable_objects.bindings]]
+name = "DARB_API"
+class_name = "DarbApiContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DarbApiContainer"]
+
 [vars]
-API_ORIGIN = "https://darb-gps-x.onrender.com"
-ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web.onrender.com,https://darb-gps-web-2026.tadjojo.workers.dev"
+ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web-2026.tadjojo.workers.dev"
+
+[observability]
+enabled = true

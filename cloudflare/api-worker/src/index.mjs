@@ -665,7 +665,8 @@ export default {
         return json({ id: user.id, email: user.email ?? null, phone: user.phone ?? null, role: user.role ?? null }, 200, headers);
       }
       return json({ status: "not_implemented", message: "This route is not yet migrated to the Free Worker API. Existing API is not replaced until migration is completed." }, 501, headers);
-    } catch {
+    } catch (error) {
+      if (env.DEBUG) console.error(error);
       return json({ status: "error", message: "API configuration or upstream request failed" }, 502, headers);
     }
   },

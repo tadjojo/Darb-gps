@@ -285,7 +285,7 @@ class _HomePageState extends State<HomePage> {
       if (data == null) return;
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
-      if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+      if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
       if (mounted) setState(() => position = LatLng(lat, lng));
     } catch (_) { /* REST refresh is retried on the next reconnect/manual action. */ }
   }

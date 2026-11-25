@@ -6,7 +6,7 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Liveness endpoint (`/api/v1/health/live`).
 - Readiness endpoint checks whether Supabase settings exist; it does not test DB connectivity.
 - Supabase Auth login, refresh, and logout proxy scaffolding.
-- Organization creation, vehicle creation, and vehicle listing route prototypes through authenticated Supabase RPCs.
+- Organization creation, vehicle creation/listing, and vehicle membership add/revoke route prototypes through authenticated Supabase RPCs.
 - Mobile enrollment, device listing, location ingestion, latest-location, history, trips, trip route, and stops through authenticated RPCs.
 - GPS hardware tracker enrollment, one-time credential generation, credential rotation, revocation, JSON ingest, GT06 heartbeat, and HTTPS GT06/NMEA adapters. Hardware ingestion is service-role RPC-backed; the service-role key is a Cloudflare-only secret.
 - Transaction-safe SQL RPC migration is staged for these operations; syntax checked against the live project in a transaction that was rolled back (no persistent schema change).

@@ -1,4 +1,4 @@
-import { Container } from "@cloudflare/containers";
+import { Container, getContainer } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -59,7 +59,7 @@ export default {
     }
 
     if (url.pathname === "/api/v1/health/live" && request.method === "GET") {
-      const container = workerEnv.DARB_API.get("primary");
+      const container = getContainer(workerEnv.DARB_API);
       try {
         const response = await container.fetch(request);
         const headers = new Headers(response.headers);

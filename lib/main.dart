@@ -12,6 +12,7 @@ import 'services/darb_client.dart';
 import 'services/pending_location_store.dart';
 import 'services/realtime_client.dart';
 import 'services/navigation_service.dart';
+import 'services/gps_coordinate_validator.dart';
 
 void main() => runApp(const DarbApp());
 
@@ -262,8 +263,7 @@ class _HomePageState extends State<HomePage> {
         final lat = (event['latitude'] as num?)?.toDouble();
         final lng = (event['longitude'] as num?)?.toDouble();
         // Realtime payloads are untrusted input: validate before constructing LatLng.
-        if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
-            lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+        if (!GpsCoordinateValidator.isValid(lat, lng)) return;
         final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
         if (id != null) {
           if (!seenEvents.add(id)) return;
@@ -281,8 +281,7 @@ class _HomePageState extends State<HomePage> {
       if (data == null) return;
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
-      if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
-          lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+      if (!GpsCoordinateValidator.isValid(lat, lng)) return;
       if (mounted) setState(() => position = LatLng(lat, lng));
     } catch (_) { /* REST refresh is retried on the next reconnect/manual action. */ }
   }

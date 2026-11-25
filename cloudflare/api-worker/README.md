@@ -13,7 +13,7 @@ Incremental migration target for DARB GPS. **Not a production replacement.** Kee
 | `/api/v1/auth/logout` | POST | Local sign-out |
 | `/api/v1/auth/me` | GET | Bearer validation and minimal user profile |
 | `/api/v1/organizations` | POST | Create organization via transaction RPC |
-| `/api/v1/organizations/:id/vehicles` | GET/POST | List/create vehicles via scoped RPCs |
+| `/api/v1/organizations/:id/vehicles` | GET/POST | List/create vehicles via scoped RPCs |\n| `/api/v1/vehicles/:id/members` | POST | Add/restore vehicle member |\n| `/api/v1/vehicles/:id/members/:userId` | DELETE | Revoke vehicle membership |
 | `/api/v1/tracking/devices/enroll-mobile` | POST | Mobile device enrollment |
 | `/api/v1/tracking/devices/vehicle/:id` | GET | List mobile and GPS hardware devices |
 | `/api/v1/tracking/locations` | POST | Mobile location ingestion |

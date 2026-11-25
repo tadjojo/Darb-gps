@@ -32,33 +32,40 @@ function json(data, status, headers) {
 
 
 function parseNmeaSentence(sentence) {
-  const match = /^\\$([^*]+)\\*([0-9A-Fa-f]{2})$/.exec(sentence.trim());
-  if (!match) throw new Error("NMEA sentence must include checksum");
-  let checksum = 0; for (const ch of match[1]) checksum ^= ch.charCodeAt(0);
-  if (checksum !== Number.parseInt(match[2], 16)) throw new Error("NMEA checksum mismatch");
-  const fields = match[1].split(",");
-  if (!/^[A-Z]{2}(RMC|GGA)$/i.test(fields[0])) throw new Error("Unsupported NMEA sentence type");
-  const type = fields[0].slice(-3).toUpperCase();
+  const line = String(sentence).trim();
+  if (!line.startsWith("$")) throw new Error("NMEA sentence must include checksum");
+  const star = line.lastIndexOf("*");
+  if (star < 2 || star !== line.length - 3) throw new Error("NMEA sentence must include checksum");
+  const checksumText = line.slice(star + 1);
+  if (![...checksumText].every((ch) => (ch >= "0" && ch <= "9") || (ch.toUpperCase() >= "A" && ch.toUpperCase() <= "F"))) throw new Error("Invalid NMEA checksum field");
+  const body = line.slice(1, star); let checksum = 0;
+  for (const ch of body) checksum ^= ch.charCodeAt(0);
+  if (checksum !== Number.parseInt(checksumText, 16)) throw new Error("NMEA checksum mismatch");
+  const fields = body.split(",");
+  const talkerType = fields[0] || "";
+  if (talkerType.length !== 5 || !/^[A-Z]{2}(RMC|GGA)$/i.test(talkerType)) throw new Error("Unsupported NMEA sentence type");
+  const type = talkerType.slice(-3).toUpperCase();
+  const digits = (v) => typeof v === "string" && v.length > 0 && [...v].every((ch) => ch >= "0" && ch <= "9");
   const coordinate = (value, hemisphere, degreeDigits, max) => {
-    if (!/^[0-9]+(?:\\.[0-9]+)?$/.test(value) || value.split(".")[0].length !== degreeDigits + 2) throw new Error("Invalid NMEA coordinate");
-    const degrees = Number(value.slice(0, degreeDigits)), minutes = Number(value.slice(degreeDigits));
+    const parts = String(value).split(".");
+    if (parts.length > 2 || !digits(parts[0]) || (parts.length === 2 && !digits(parts[1])) || parts[0].length !== degreeDigits + 2) throw new Error("Invalid NMEA coordinate");
+    const degrees = Number(parts[0].slice(0, degreeDigits)), minutes = Number(parts[0].slice(degreeDigits) + (parts.length === 2 ? "." + parts[1] : ""));
     if (!Number.isFinite(minutes) || minutes < 0 || minutes >= 60 || degrees > max || (degrees === max && minutes !== 0)) throw new Error("NMEA coordinate out of range");
     const positive = degreeDigits === 2 ? "N" : "E", negative = degreeDigits === 2 ? "S" : "W";
     if (hemisphere !== positive && hemisphere !== negative) throw new Error("Invalid NMEA hemisphere");
     return (degrees + minutes / 60) * (hemisphere === negative ? -1 : 1);
   };
   const time = (value) => {
-    const m = /^([0-9]{2})([0-9]{2})([0-9]{2})(?:\\.([0-9]+))?$/.exec(value);
-    if (!m) throw new Error("Invalid NMEA UTC time");
-    const hour = Number(m[1]), minute = Number(m[2]), second = Number(m[3]), millis = Number((m[4] || "").padEnd(3,"0").slice(0,3));
+    if (value.length < 6 || !digits(value.slice(0,6)) || (value.length > 6 && (value[6] !== "." || !digits(value.slice(7))))) throw new Error("Invalid NMEA UTC time");
+    const hour = Number(value.slice(0,2)), minute = Number(value.slice(2,4)), second = Number(value.slice(4,6)), millis = Number((value.slice(7) || "").padEnd(3,"0").slice(0,3));
     if (hour > 23 || minute > 59 || second > 59) throw new Error("NMEA UTC time out of range");
     return {hour,minute,second,millis};
   };
   if (type === "RMC") {
     if (fields.length < 10 || fields[2] !== "A") throw new Error("NMEA RMC has no valid fix");
-    const t = time(fields[1]);
-    if (!/^[0-9]{6}$/.test(fields[9])) throw new Error("Invalid NMEA date");
-    const day = Number(fields[9].slice(0,2)), month = Number(fields[9].slice(2,4)), yy = Number(fields[9].slice(4,6)), year = yy >= 80 ? 1900+yy : 2000+yy;
+    const t = time(fields[1]), dateField = fields[9];
+    if (dateField.length !== 6 || !digits(dateField)) throw new Error("Invalid NMEA date");
+    const day = Number(dateField.slice(0,2)), month = Number(dateField.slice(2,4)), yy = Number(dateField.slice(4,6)), year = yy >= 80 ? 1900+yy : 2000+yy;
     const date = new Date(Date.UTC(year,month-1,day));
     if (month<1 || month>12 || day<1 || date.getUTCFullYear()!==year || date.getUTCMonth()!==month-1 || date.getUTCDate()!==day) throw new Error("NMEA date out of range");
     const recordedAt = new Date(Date.UTC(year,month-1,day,t.hour,t.minute,t.second,t.millis)).toISOString();

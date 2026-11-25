@@ -267,7 +267,7 @@ class _HomePageState extends State<HomePage> {
         final lat = (event['latitude'] as num?)?.toDouble();
         final lng = (event['longitude'] as num?)?.toDouble();
         // Realtime payloads are untrusted input: validate before constructing LatLng.
-        if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+        if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
         final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
         if (id != null) {
           if (!seenEvents.add(id)) return;

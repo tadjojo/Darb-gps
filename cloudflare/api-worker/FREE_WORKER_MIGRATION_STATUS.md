@@ -1,37 +1,32 @@
-# Free-plan API migration prototype (not production)
+# Cloudflare Workers Free migration — staging prototype
 
-Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intended for Cloudflare Workers Free.
+**Status:** Draft PR #46. Not deployed. Production API and main branch remain unchanged.
 
-## Implemented in this prototype
-- Liveness endpoint (`/api/v1/health/live`).
-- Readiness endpoint checks whether Supabase settings exist; it does not test DB connectivity.
-- Supabase Auth login, refresh, and logout proxy scaffolding.
-- Organization creation, vehicle creation/listing, and vehicle membership add/revoke route prototypes through authenticated Supabase RPCs.
-- Mobile enrollment, device listing, location ingestion, latest-location, history, trips, trip route, and stops through authenticated RPCs.
-- GPS hardware tracker enrollment, one-time credential generation, credential rotation, revocation, JSON ingest, GT06 heartbeat, and HTTPS GT06/NMEA adapters.
-- Alert list, acknowledge/resolve, rule list/create routes; speed-limit and geofence event evaluation; tamper alerts; offline alert recovery. Hardware ingestion is service-role RPC-backed; the service-role key is a Cloudflare-only secret.
-- Transaction-safe SQL RPC migration is staged for these operations; syntax checked against the live project in a transaction that was rolled back (no persistent schema change).
-- Authenticated `/api/v1/auth/me` endpoint validates bearer tokens through Supabase Auth and returns a minimal profile (id/email/phone/role only).
-- Origin allow-list CORS.
-- 26 automated Worker tests cover health/readiness, CORS, login/refresh/logout/auth-me, organizations/vehicles, mobile enrollment, device listing, location validation/ingestion and latest-location routes.
-- Supabase logout uses local-session scope and is tested to forward the access-token bearer.
-- Latest Worker validation passed on commit `d6d8e270` (49 Node tests and Wrangler dry-run). Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
-- No Cloudflare Containers dependency; no secrets or placeholder credentials in Wrangler config.
+## Included in the staging branch
+- Worker-native liveness/readiness, Supabase Auth login/refresh/logout, and minimal authenticated profile route.
+- Organization/vehicle operations, membership routes, mobile device enrollment/listing, location ingestion/latest/history, trips, trip route and stops using staged authenticated Supabase RPCs.
+- Hardware GPS tracker enrollment, one-time bearer credential, credential rotation/revocation, JSON HTTPS ingestion, GT06 heartbeat and HTTPS GT06/NMEA adapters.
+- Alerts API and rules, acknowledge/resolve actions, speed-limit and geofence evaluation, tamper and offline/recovery events.
+- Flutter live-location client polls REST latest-location every 10 seconds (no Socket.IO dependency); alert tab refreshes every 30 seconds while open.
+- Flutter UI for alerts and rule creation; GPS hardware enrollment (JSON/GT06/NMEA), tracker credential rotation and revocation.
+- Tracker secret is shown once; server stores its hash. Never commit credentials.
+- Worker uses Cloudflare Workers APIs, no Containers. Config has no secrets.
 
-## Not migrated
-Vehicle membership add/revoke, raw TCP hardware reception, alert evaluation and alert API, realtime, and admin. Unported routes return 501.
+## Validation
+- Cloudflare Worker validation CI: **49 Node tests passed** and Wrangler deploy dry-run succeeded on commit 70fb08db.
+- Validation CI started again for subsequent Flutter tracker UI commit 11883345; Android/iOS/smoke checks were still pending at this note's time.
+- SQL RPC migrations were inspected/tested in rollback-only transactions against Supabase; no persistent schema changes were made by that test.
+- CI smoke check targets current legacy Render API as a baseline; it is not evidence Cloudflare Worker deployment/production test.
 
-## Live project review
-- Supabase project was read-only inspected: schema and RLS roles confirmed; no persistent changes were made.
-- A non-destructive index migration for four private alert-table foreign keys and the RPC migration are staged in this branch only.
-- Supabase Auth leaked-password protection is currently disabled; project owner should enable it in Auth settings.
+## Remaining before production cutover
+- Configure Worker vars/secrets: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, and service-role secret used by server-side ingestion RPCs. Configure only in Cloudflare dashboard; do not commit.
+- Apply/verify staged Supabase migrations in dedicated staging, then production with backup/rollback plan.
+- Deploy Worker and run authenticated integration tests against staging.
+- Raw TCP GPS hardware reception requires a separate gateway; Worker HTTPS adapter is not a TCP listener.
+- Review/complete admin console, push notifications and monitoring; validate all API endpoints and UI contracts.
+- Verify Flutter builds/tests on Android/iOS and complete security review before merging/replacing production endpoint.
 
-## Configuration
-Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as Worker variables/secrets through Cloudflare dashboard or Wrangler. Do not commit secrets. Do not deploy as production replacement until migration, configuration, and full tests pass.
-
-
-## Migration notes from backend/client review
-- Flutter client API contract expects organization/vehicle creation and listing, mobile enrollment, location ingestion/latest, device listing, trip/route/stop queries.
-- Existing backend uses PostgreSQL transactions and private-schema tables for tracking-device credential records; direct PostgREST calls are not a safe drop-in replacement.
-- Organization, vehicle, and mobile tracking operations use staged transaction-safe RPCs with authorization derived from `auth.uid()`. Vehicle membership add/revoke and other tracking/admin routes remain unported.
-- Direct raw TCP tracker reception is not supported by the Worker fetch handler; the migrated GT06/NMEA routes accept HTTPS payload adapters, while the existing TCP gateway remains separate.
+## Free-tier constraints and caveats
+- Readiness confirms required config values exist, not live Supabase connectivity.
+- Realtime fan-out is replaced by 10-second polling; update latency and request volume differ.
+- No Worker deployment or production DB schema change has been performed by this migration work.

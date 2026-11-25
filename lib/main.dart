@@ -244,11 +244,18 @@ class _HomePageState extends State<HomePage> {
         if (value) await _loadLatest();
       },
       onLocation: (event) {
-        final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
-        if (id != null && !seenEvents.add(id)) return;
         final lat = (event['latitude'] as num?)?.toDouble();
         final lng = (event['longitude'] as num?)?.toDouble();
-        if (lat != null && lng != null && mounted) setState(() => position = LatLng(lat, lng));
+        // Realtime payloads are untrusted input: validate before constructing LatLng.
+        if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
+            lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+        final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
+        if (id != null) {
+          if (!seenEvents.add(id)) return;
+          // Bound memory usage during long-running live sessions.
+          if (seenEvents.length > 1000) seenEvents.remove(seenEvents.first);
+        }
+        if (mounted) setState(() => position = LatLng(lat, lng));
       });
   }
 
@@ -259,7 +266,9 @@ class _HomePageState extends State<HomePage> {
       if (data == null) return;
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
-      if (lat != null && lng != null && mounted) setState(() => position = LatLng(lat, lng));
+      if (lat == null || lng == null || !lat.isFinite || !lng.isFinite ||
+          lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+      if (mounted) setState(() => position = LatLng(lat, lng));
     } catch (_) { /* REST refresh is retried on the next reconnect/manual action. */ }
   }
 

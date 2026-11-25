@@ -13,11 +13,11 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Origin allow-list CORS.
 - 26 automated Worker tests cover health/readiness, CORS, login/refresh/logout/auth-me, organizations/vehicles, mobile enrollment, device listing, location validation/ingestion and latest-location routes.
 - Supabase logout uses local-session scope and is tested to forward the access-token bearer.
-- Latest Worker validation passed on commit `7d578a18` (26 Node tests and Wrangler dry-run). Later commits only updated migration documentation. Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
+- Latest Worker validation passed on commit `469930a0` (30 Node tests and Wrangler dry-run). Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
 - No Cloudflare Containers dependency; no secrets or placeholder credentials in Wrangler config.
 
 ## Not migrated
-Vehicle membership add/revoke, history/trips/stops, GPS hardware device credentials/protocols, alert evaluation and alert API, realtime, and admin. Unported routes return 501.
+Vehicle membership add/revoke, GPS hardware device credentials/protocols, alert evaluation and alert API, realtime, and admin. Unported routes return 501.
 
 ## Live project review
 - Supabase project was read-only inspected: schema and RLS roles confirmed; no persistent changes were made.

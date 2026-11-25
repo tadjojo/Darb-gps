@@ -6,10 +6,11 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Liveness endpoint (`/api/v1/health/live`).
 - Readiness endpoint checks whether Supabase settings exist; it does not test DB connectivity.
 - Supabase Auth login, refresh, and logout proxy scaffolding.
+- Authenticated `/api/v1/auth/me` endpoint validates bearer tokens through Supabase Auth and returns a minimal profile (id/email/phone/role only).
 - Origin allow-list CORS.
 - Tests for health/readiness, CORS, login input validation, Supabase auth proxy happy-path (login/refresh/logout), and explicit 501 responses for unported routes.
 - Supabase logout uses local-session scope and is tested to forward the access-token bearer.
-- Latest Cloudflare Worker validation passed (Node tests and Wrangler dry-run) on commit `0a036b96`; additional auth proxy tests were added afterward and are awaiting CI confirmation.
+- Latest validation passed (Node tests and Wrangler dry-run) on commit `862c3375`; current commit has added `/auth/me` tests, with CI pending.
 - No Cloudflare Containers dependency; no secrets or placeholder credentials in Wrangler config.
 
 ## Not migrated

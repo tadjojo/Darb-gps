@@ -71,7 +71,7 @@ export default {
 
     try {
       if (url.pathname === "/api/v1/auth/login" && request.method === "POST") {
-        const body = await request.json();
+        const body = await request.json().catch(() => null);
         const identifier = String(body?.identifier || "").trim();
         const password = body?.password;
         if (!identifier || typeof password !== "string" || !password) {
@@ -84,7 +84,7 @@ export default {
       }
 
       if (url.pathname === "/api/v1/auth/refresh" && request.method === "POST") {
-        const body = await request.json();
+        const body = await request.json().catch(() => null);
         if (!body?.refreshToken) return json({ message: "Refresh token is required" }, 400, headers);
         const { response, body: auth } = await supabaseAuth(env, "/auth/v1/token?grant_type=refresh_token", { refresh_token: body.refreshToken });
         if (!response.ok) return json({ message: "Refresh token is invalid or expired" }, 401, headers);

@@ -1,8 +1,8 @@
-name = "darb-gps-api-edge"
+name = "darb-gps-new"
 main = "src/index.mjs"
 compatibility_date = "2026-11-24"
 workers_dev = true
 
 [vars]
 API_ORIGIN = "https://darb-gps-x.onrender.com"
-ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web.onrender.com"
+ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web.onrender.com,https://darb-gps-web-2026.tadjojo.workers.dev"

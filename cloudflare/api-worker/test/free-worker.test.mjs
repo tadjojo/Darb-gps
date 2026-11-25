@@ -159,3 +159,39 @@ test("auth/me maps invalid upstream token to 401", async () => {
     assert.equal(res.status, 401);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+
+test("login rejects malformed JSON with 400 instead of gateway error", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{invalid",
+  }), env);
+  assert.equal(res.status, 400);
+});
+
+test("refresh rejects malformed JSON with 400 instead of gateway error", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/refresh", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{invalid",
+  }), env);
+  assert.equal(res.status, 400);
+});
+
+test("auth/me reports configuration missing without upstream call", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/me", { headers: { Authorization: "Bearer token" } }), {});
+  assert.equal(res.status, 503);
+});
+
+test("phone login uses phone field in Supabase request", async () => {
+  const originalFetch = globalThis.fetch;
+  let posted = {};
+  globalThis.fetch = async (_input, init = {}) => {
+    posted = JSON.parse(init.body || "{}");
+    return new Response(JSON.stringify({ access_token: "a", refresh_token: "r" }), { status: 200 });
+  };
+  try {
+    const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: "+962790000000", password: "pw" }),
+    }), env);
+    assert.equal(res.status, 200);
+    assert.deepEqual(posted, { phone: "+962790000000", password: "pw" });
+  } finally { globalThis.fetch = originalFetch; }
+});

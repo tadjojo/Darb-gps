@@ -70,6 +70,10 @@ class _HomePageState extends State<HomePage> {
   int pendingCount = 0;
   List<Map<String, dynamic>> registeredDevices = [];
   bool loadingDevices = false;
+  List<Map<String, dynamic>> alertHistory = [];
+  List<Map<String, dynamic>> alertRules = [];
+  String alertFilter = 'open';
+  bool loadingAlerts = false;
   List<Map<String, dynamic>> tripHistory = [];
   List<Map<String, dynamic>> stopHistory = [];
   Map<String, dynamic>? selectedStop;
@@ -177,6 +181,76 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => registeredDevices = devices);
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => loadingDevices = false); }
+  }
+
+
+  Future<void> _loadAlerts() async {
+    if (!loggedIn || vehicleId == null || loadingAlerts) return;
+    setState(() => loadingAlerts = true);
+    try {
+      final results = await Future.wait([
+        api.listAlerts(status: alertFilter == 'all' ? null : alertFilter, vehicleId: vehicleId),
+        api.listAlertRules(vehicleId: vehicleId),
+      ]);
+      if (mounted) setState(() { alertHistory = results[0]; alertRules = results[1]; });
+    } catch (e) { _showError(e); }
+    finally { if (mounted) setState(() => loadingAlerts = false); }
+  }
+
+  Future<void> _acknowledgeAlert(Map<String, dynamic> alert) async {
+    final id = alert['id']?.toString(); if (id == null) return;
+    try { await api.acknowledgeAlert(id); await _loadAlerts(); } catch (e) { _showError(e); }
+  }
+
+  Future<void> _resolveAlert(Map<String, dynamic> alert) async {
+    final id = alert['id']?.toString(); if (id == null) return;
+    try { await api.resolveAlert(id); await _loadAlerts(); } catch (e) { _showError(e); }
+  }
+
+  Future<void> _createSpeedRule() async {
+    final vehicle = vehicleId; if (vehicle == null || !loggedIn) return;
+    final nameController = TextEditingController(text: tr('حد السرعة', 'Speed limit'));
+    final limitController = TextEditingController(text: '80');
+    final result = await showDialog<Map<String, String>>(context: context, builder: (context) => AlertDialog(
+      title: Text(tr('قاعدة سرعة جديدة', 'New speed rule')),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: nameController, decoration: InputDecoration(labelText: tr('اسم القاعدة', 'Rule name'))),
+        TextField(controller: limitController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr('السرعة القصوى كم/س', 'Limit km/h'))),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إلغاء', 'Cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(context, {'name': nameController.text.trim(), 'limit': limitController.text.trim()}), child: Text(tr('إنشاء', 'Create'))),
+      ],
+    ));
+    nameController.dispose(); limitController.dispose();
+    if (result == null) return;
+    final limit = double.tryParse(result['limit'] ?? '');
+    if (result['name']!.isEmpty || limit == null || limit < 1 || limit > 300) { _showError(Exception(tr('أدخل اسمًا وحد سرعة بين 1 و300', 'Enter a name and speed limit between 1 and 300'))); return; }
+    try { await api.createAlertRule(vehicle, 'speed_limit', result['name']!, {'limitKmh': limit}); await _loadAlerts(); } catch (e) { _showError(e); }
+  }
+
+  Future<void> _createGeofenceRule() async {
+    final vehicle = vehicleId, point = position;
+    if (vehicle == null || !loggedIn || point == null) { _showError(Exception(tr('يجب توفر موقع المركبة لإنشاء نطاق جغرافي', 'A current vehicle location is required to create a geofence'))); return; }
+    final nameController = TextEditingController(text: tr('نطاق جغرافي', 'Geofence'));
+    final radiusController = TextEditingController(text: '200');
+    final result = await showDialog<Map<String, String>>(context: context, builder: (context) => AlertDialog(
+      title: Text(tr('نطاق جغرافي جديد', 'New geofence')),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: nameController, decoration: InputDecoration(labelText: tr('اسم النطاق', 'Fence name'))),
+        TextField(controller: radiusController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr('نصف القطر بالأمتار', 'Radius in meters'))),
+        Text('${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}'),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إلغاء', 'Cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(context, {'name': nameController.text.trim(), 'radius': radiusController.text.trim()}), child: Text(tr('إنشاء', 'Create'))),
+      ],
+    ));
+    nameController.dispose(); radiusController.dispose();
+    if (result == null) return;
+    final radius = double.tryParse(result['radius'] ?? '');
+    if (result['name']!.isEmpty || radius == null || radius < 25 || radius > 100000) { _showError(Exception(tr('نصف القطر يجب أن يكون بين 25 و100000 متر', 'Radius must be between 25 and 100000 meters'))); return; }
+    try { await api.createAlertRule(vehicle, 'geofence', result['name']!, {'latitude': point.latitude, 'longitude': point.longitude, 'radiusMeters': radius}); await _loadAlerts(); } catch (e) { _showError(e); }
   }
 
   Future<void> _loadTrips() async {
@@ -422,17 +496,18 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final center = position ?? const LatLng(31.9539, 35.9106);
-    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), settingsScreen()];
+    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), alertsScreen(), settingsScreen()];
     return Directionality(textDirection: widget.arabic ? TextDirection.rtl : TextDirection.ltr, child: Scaffold(
       appBar: AppBar(backgroundColor: Colors.white,
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),
         actions: [IconButton(onPressed: widget.toggleLanguage, icon: const Icon(Icons.language)), IconButton(onPressed: _loadLatest, icon: const Icon(Icons.refresh))]),
       body: Column(children: [Expanded(child: pages[tab]), Container(width: double.infinity, color: const Color(0xFFE8F2FF), padding: const EdgeInsets.all(9), child: Text(message, textAlign: TextAlign.center))]),
-      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) { setState(() => tab = v); if (v == 2) _loadDevices(); if (v == 3) _loadTrips(); }, destinations: [
+      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) { setState(() => tab = v); if (v == 2) _loadDevices(); if (v == 3) _loadTrips(); if (v == 4) _loadAlerts(); }, destinations: [
         NavigationDestination(icon: const Icon(Icons.map_outlined), label: tr('الخريطة', 'Map')),
         NavigationDestination(icon: const Icon(Icons.share_location), label: tr('التتبع', 'Tracking')),
         NavigationDestination(icon: const Icon(Icons.directions_car), label: tr('المركبات', 'Vehicles')),
         NavigationDestination(icon: const Icon(Icons.route), label: tr('الرحلات', 'Trips')),
+        NavigationDestination(icon: const Icon(Icons.notifications), label: tr('التنبيهات', 'Alerts')),
         NavigationDestination(icon: const Icon(Icons.settings), label: tr('الإعدادات', 'Settings')),
       ]),
     ));
@@ -526,6 +601,50 @@ class _HomePageState extends State<HomePage> {
     }),
   ]);
 
+
+  Widget alertsScreen() => ListView(padding: const EdgeInsets.all(16), children: [
+    Row(children: [
+      Expanded(child: Text(tr('التنبيهات والقواعد', 'Alerts & rules'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
+      IconButton(onPressed: loadingAlerts ? null : _loadAlerts, icon: const Icon(Icons.refresh)),
+    ]),
+    if (!loggedIn || vehicleId == null)
+      Card(child: ListTile(leading: const Icon(Icons.info_outline), title: Text(tr('سجّل الدخول وحدد مركبة لعرض التنبيهات', 'Sign in and select a vehicle to view alerts'))))
+    else ...[
+      DropdownButtonFormField<String>(value: alertFilter, decoration: InputDecoration(labelText: tr('تصفية التنبيهات', 'Filter alerts')), items: [
+        DropdownMenuItem(value: 'open', child: Text(tr('مفتوحة', 'Open'))),
+        DropdownMenuItem(value: 'acknowledged', child: Text(tr('تمت الملاحظة', 'Acknowledged'))),
+        DropdownMenuItem(value: 'resolved', child: Text(tr('تم حلها', 'Resolved'))),
+        DropdownMenuItem(value: 'all', child: Text(tr('الكل', 'All'))),
+      ], onChanged: loadingAlerts ? null : (value) { if (value != null) { setState(() => alertFilter = value); _loadAlerts(); } }),
+      if (loadingAlerts) const Padding(padding: EdgeInsets.all(18), child: Center(child: CircularProgressIndicator())),
+      if (!loadingAlerts && alertHistory.isEmpty) Card(child: ListTile(leading: const Icon(Icons.notifications_none), title: Text(tr('لا توجد تنبيهات في هذه الفئة', 'No alerts in this category')))),
+      if (!loadingAlerts) ...alertHistory.map((alert) {
+        final status = alert['status']?.toString() ?? 'open';
+        final severity = alert['severity']?.toString() ?? 'info';
+        final occurred = DateTime.tryParse('${alert['occurred_at']}')?.toLocal();
+        final date = occurred == null ? '' : '${occurred.month}/${occurred.day} ${occurred.hour.toString().padLeft(2,'0')}:${occurred.minute.toString().padLeft(2,'0')}';
+        final color = severity == 'critical' ? Colors.red : severity == 'warning' ? Colors.orange : Colors.blue;
+        return Card(child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(Icons.notifications_active, color: color), const SizedBox(width: 8), Expanded(child: Text(alert['title']?.toString() ?? tr('تنبيه', 'Alert'), style: const TextStyle(fontWeight: FontWeight.bold))), Chip(label: Text(status))]),
+          Text(alert['message']?.toString() ?? '', maxLines: 4),
+          if (date.isNotEmpty) Text(date, style: Theme.of(context).textTheme.bodySmall),
+          Wrap(spacing: 8, children: [
+            if (status == 'open') OutlinedButton.icon(onPressed: () => _acknowledgeAlert(alert), icon: const Icon(Icons.check), label: Text(tr('ملاحظة', 'Acknowledge'))),
+            if (status != 'resolved') OutlinedButton.icon(onPressed: () => _resolveAlert(alert), icon: const Icon(Icons.done_all), label: Text(tr('حل التنبيه', 'Resolve'))),
+          ]),
+        ])));
+      }),
+      const Divider(height: 28),
+      Row(children: [Expanded(child: Text(tr('قواعد التنبيه', 'Alert rules'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))), IconButton(onPressed: _createSpeedRule, icon: const Icon(Icons.speed)), IconButton(onPressed: _createGeofenceRule, icon: const Icon(Icons.my_location))]),
+      if (alertRules.isEmpty && !loadingAlerts) Card(child: ListTile(leading: const Icon(Icons.rule), title: Text(tr('لا توجد قواعد بعد', 'No rules yet')), subtitle: Text(tr('أنشئ قاعدة سرعة أو نطاقًا جغرافيًا باستخدام الأزرار', 'Create speed or geofence rules using the buttons')))),
+      ...alertRules.map((rule) {
+        final type = rule['rule_type']?.toString() ?? '';
+        final config = rule['config'] is Map ? Map<String, dynamic>.from(rule['config']) : <String, dynamic>{};
+        final summary = type == 'speed_limit' ? '${config['limitKmh'] ?? '-'} km/h' : '${config['radiusMeters'] ?? '-'} m';
+        return Card(child: ListTile(leading: Icon(type == 'speed_limit' ? Icons.speed : Icons.my_location), title: Text(rule['name']?.toString() ?? ''), subtitle: Text(summary), trailing: Icon(rule['enabled'] == true ? Icons.check_circle : Icons.pause_circle_outline)));
+      }),
+    ],
+  ]);
   Widget tripsScreen() => ListView(padding: const EdgeInsets.all(16), children: [
     Row(children: [Expanded(child: Text(tr('الرحلات والسجل', 'Trips & history'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
       DropdownButton<int>(value: historyDays, items: const [7, 14, 30].map((d) => DropdownMenuItem<int>(value: d, child: Text('$d ${tr('أيام', 'days')}'))).toList(), onChanged: loadingTrips ? null : (v) { if (v != null) { setState(() => historyDays = v); _loadTrips(); } }),

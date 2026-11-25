@@ -9,7 +9,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_user uuid := auth.uid();
-  v_device public.darb_mobile_devices;
+  v_device private.darb_mobile_devices;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';

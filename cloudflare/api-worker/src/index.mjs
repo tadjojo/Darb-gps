@@ -1,6 +1,7 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://tadjojo.github.io",
   "https://darb-gps-web.onrender.com",
+  "https://darb-gps-web-2026.tadjojo.workers.dev",
 ];
 
 function allowedOrigins(env) {

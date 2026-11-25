@@ -35,3 +35,8 @@ The migration is staged in the Git branch only and **has not been applied to the
 ## Why migration route work is now schema-grounded
 
 The actual project schema and roles are now confirmed. Organization/vehicle operations still require atomic operations and exact role rules; the next implementation should use safe transactional RPC functions or carefully scoped Supabase REST operations under the caller JWT, with integration tests for creator/admin/fleet-supervisor/member permissions. Private device and alert tables must not be exposed through direct REST grants.
+
+
+## Rollback-only functional verification of staged RPCs
+
+The staged organization/vehicle and mobile RPC definitions were temporarily installed within a transaction and exercised under the `authenticated` role with an auth UID set for the test context. The tests covered creating an organization and admin membership, creating a vehicle and owner membership, mobile enrollment, first location ingestion, duplicate event handling, latest-location query, and device listing. The transaction was rolled back, then queried to confirm zero test organization, vehicle, mobile device, and location rows remained. This verifies function behavior but is not a substitute for live API/Flutter integration testing.

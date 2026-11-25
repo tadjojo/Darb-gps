@@ -234,13 +234,42 @@ async function supabaseAuth(env, path, payload) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(incomingRequest, env) {
+    let request = incomingRequest;
     const origin = request.headers.get("Origin") || "";
     const headers = cors(origin, env);
     const url = new URL(request.url);
-    const contentLength = Number(request.headers.get("Content-Length") || 0);
-    if (Number.isFinite(contentLength) && contentLength > 65536) {
+    const maxBodyBytes = 65536;
+    const declaredLength = request.headers.get("Content-Length");
+    if (declaredLength !== null && (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > maxBodyBytes)) {
       return json({ message: "Request body too large (maximum 64 KiB)" }, 413, headers);
+    }
+    if (request.body) {
+      const reader = request.body.getReader();
+      const chunks = [];
+      let totalBytes = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBodyBytes) {
+            await reader.cancel();
+            return json({ message: "Request body too large (maximum 64 KiB)" }, 413, headers);
+          }
+          chunks.push(value);
+        }
+      } catch {
+        await reader.cancel().catch(() => {});
+        return json({ message: "Unable to read request body" }, 400, headers);
+      }
+      const bodyBytes = new Uint8Array(totalBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bodyBytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      request = new Request(request, { body: bodyBytes });
     }
     if (origin && !allowedOrigins(env).includes(origin)) {
       return json({ status: "error", message: "Origin not allowed" }, 403, headers);

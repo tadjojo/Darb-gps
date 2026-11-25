@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> {
     deviceId = await _storage.read(key: 'device_id');
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
-    if (mounted) { setState(() {});
+    if (mounted) { setState(() {}); }
     if (loggedIn && vehicleId != null) { await _connectRealtime(); }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
@@ -113,7 +113,7 @@ class _HomePageState extends State<HomePage> {
         } else if (refreshed == null) {
           // A rejected/expired refresh token clears local credentials in DarbClient.
           realtime.disconnect();
-          if (mounted) setState(() {
+          if (mounted) { setState(() {
             loggedIn = false;
             liveConnected = false;
             message = tr('انتهت جلسة الدخول؛ يرجى تسجيل الدخول مجدداً', 'Your session expired; please sign in again');

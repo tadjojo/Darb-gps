@@ -13,7 +13,7 @@ The Worker is a prototype branch; this list maps the mobile API contract and mig
 
 CI validates Node tests and Wrangler bundle.
 
-## Stage 1 — Organizations and vehicles (next)
+## Stage 1 — Organizations and vehicles (prototype routes implemented; SQL migration staged)
 
 - `POST /api/v1/organizations`
 - `POST /api/v1/organizations/:organizationId/vehicles`
@@ -21,7 +21,7 @@ CI validates Node tests and Wrangler bundle.
 - `POST /api/v1/vehicles/:vehicleId/members`
 - `DELETE /api/v1/vehicles/:vehicleId/members/:memberUserId`
 
-Required prerequisite: confirmed core schema and role constraints, then transaction-safe SQL RPCs for create organization+admin member and create vehicle+membership. No database schema/RLS assumptions should be made from application service code alone.
+Prototype routes now exist for create organization, create vehicle, and list vehicles using transaction-safe RPC functions. RPC SQL was syntax-tested against the live project in a transaction that was rolled back. Migration is staged only and not applied. Remaining: review/apply RPC migration, add real-project integration tests and membership add/revoke routes. Schema and role rules were verified read-only against the connected project.
 
 ## Stage 2 — Mobile tracking
 

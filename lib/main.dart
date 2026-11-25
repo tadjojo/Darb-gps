@@ -426,7 +426,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final center = position ?? const LatLng(31.9539, 35.9106);
-    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: vehicleId, active: tab == 4, arabic: widget.arabic, position: position), GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: vehicleId, active: tab == 5, arabic: widget.arabic), settingsScreen()];
+    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: loggedIn ? vehicleId : null, active: tab == 4, arabic: widget.arabic, position: position), GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: loggedIn ? vehicleId : null, active: tab == 5, arabic: widget.arabic), settingsScreen()];
     return Directionality(textDirection: widget.arabic ? TextDirection.rtl : TextDirection.ltr, child: Scaffold(
       appBar: AppBar(backgroundColor: Colors.white,
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),

@@ -106,6 +106,18 @@ async function supabaseRpc(env, functionName, args, authorization) {
 
 
 
+
+async function hashTrackerBearer(authorization) {
+  if (!authorization || !/^Bearer\\s+\\S+$/i.test(authorization)) return null;
+  const token = authorization.replace(/^Bearer\\s+/i, "").trim();
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+function serviceConfigured(env) { return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY); }
+async function supabaseServiceRpc(env, functionName, args) {
+  const authorization = `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`;
+  return supabaseRpc(env, functionName, args, authorization);
+}
 async function generateTrackerCredential() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -115,7 +127,7 @@ async function generateTrackerCredential() {
   return { secret, hash };
 }
 function rpcErrorStatus(response, data) {
-  if (response.status === 401) return 401;
+  if (response.status === 401 || data?.code === "28000") return 401;
   if (response.status === 403 || data?.code === "42501") return 403;
   if (response.status === 404 || data?.code === "P0002") return 404;
   if (response.status === 409 || data?.code === "23505") return 409;
@@ -399,6 +411,43 @@ export default {
         const deviceId = revokeMatch[1]; if (!UUID_RE.test(deviceId)) return json({ message: "Invalid device ID" }, 400, headers);
         const { response, data } = await supabaseRpc(env, "darb_api_revoke_gps_tracker", { p_device_id: deviceId }, authorization);
         if (!response.ok) return json({ message: "Tracker revocation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/device-gateway/ingest" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        const credentialHash = await hashTrackerBearer(authorization);
+        if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const latitude = body?.latitude, longitude = body?.longitude;
+        const speedKmh = body?.speedKmh === undefined ? 0 : body.speedKmh;
+        const heading = body?.heading === undefined ? null : body.heading;
+        const recordedAt = typeof body?.recordedAt === "string" ? body.recordedAt : "";
+        const eventId = body?.eventId === undefined ? null : body.eventId;
+        const tamper = body?.tamper === undefined ? false : body.tamper;
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+            !Number.isFinite(speedKmh) || speedKmh < 0 || speedKmh > 500 ||
+            (heading !== null && (!Number.isFinite(heading) || heading < 0 || heading > 360)) ||
+            !recordedAt || !Number.isFinite(Date.parse(recordedAt)) ||
+            (eventId !== null && !UUID_RE.test(eventId)) || typeof tamper !== "boolean") return json({ message: "Invalid tracker location payload" }, 400, headers);
+        const { response, data } = await supabaseServiceRpc(env, "darb_api_ingest_gps_tracker", {
+          p_credential_hash: credentialHash, p_protocol: "json", p_latitude: latitude,
+          p_longitude: longitude, p_speed_kmh: speedKmh, p_heading: heading,
+          p_recorded_at: new Date(recordedAt).toISOString(), p_event_id: eventId, p_tamper: tamper,
+        });
+        if (!response.ok) return json({ message: "Tracker ingestion failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/device-gateway/heartbeat/gt06" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        const credentialHash = await hashTrackerBearer(authorization);
+        if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
+        const { response, data } = await supabaseServiceRpc(env, "darb_api_tracker_heartbeat", { p_credential_hash: credentialHash, p_protocol: "gt06" });
+        if (!response.ok) return json({ message: "Tracker heartbeat rejected" }, rpcErrorStatus(response, data), headers);
         return json(data, 200, headers);
       }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {

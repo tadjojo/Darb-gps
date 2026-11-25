@@ -32,6 +32,21 @@ jobs:
           cache: true
       - name: Generate iOS runner
         run: flutter create --platforms=ios --org com.darb --project-name darb_gps .
+      - name: Add explicit foreground location purpose
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          path = Path('ios/Runner/Info.plist')
+          with path.open('rb') as f:
+              data = plistlib.load(f)
+          data['NSLocationWhenInUseUsageDescription'] = (
+              'دَرْب يستخدم موقعك أثناء استخدامك للتطبيق وعند بدء مشاركة الموقع بنفسك '
+              'لعرض موقعك وتحديث موقع المركبة.'
+          )
+          with path.open('wb') as f:
+              plistlib.dump(data, f, fmt=plistlib.FMT_XML, sort_keys=False)
+          PY
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze Dart code

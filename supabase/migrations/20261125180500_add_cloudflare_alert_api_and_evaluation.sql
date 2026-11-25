@@ -2,11 +2,11 @@
 
 CREATE OR REPLACE FUNCTION private.darb_haversine_distance(p_lat1 double precision,p_lon1 double precision,p_lat2 double precision,p_lon2 double precision)
 RETURNS double precision LANGUAGE sql IMMUTABLE SET search_path=''
-AS $
+AS $h$
  SELECT 6371000.0 * 2 * asin(sqrt(least(1.0,
    sin(radians(p_lat2-p_lat1)/2)^2 + cos(radians(p_lat1))*cos(radians(p_lat2))*sin(radians(p_lon2-p_lon1)/2)^2
   )))
-$;
+$h$;
 REVOKE ALL ON FUNCTION private.darb_haversine_distance(double precision,double precision,double precision,double precision) FROM PUBLIC,anon,authenticated;
 CREATE OR REPLACE FUNCTION private.darb_evaluate_location_alerts(p_location_id bigint)
 RETURNS integer

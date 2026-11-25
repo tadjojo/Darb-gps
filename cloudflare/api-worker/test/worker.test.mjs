@@ -16,7 +16,7 @@ test("proxies API health and adds the Cloudflare edge header", async () => {
 
   try {
     const response = await worker.fetch(new Request(
-      "https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live?probe=1",
+      "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live?probe=1",
       { headers: { Origin: "https://tadjojo.github.io" } },
     ), {
       API_ORIGIN: "https://darb-gps-x.onrender.com",
@@ -41,7 +41,7 @@ test("answers allowed CORS preflight without contacting the API", async () => {
 
   try {
     const response = await worker.fetch(new Request(
-      "https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/vehicles",
+      "https://darb-gps-new.tadjojo.workers.dev/api/v1/vehicles",
       {
         method: "OPTIONS",
         headers: {
@@ -64,7 +64,7 @@ test("answers allowed CORS preflight without contacting the API", async () => {
 
 test("rejects origins not on the allowlist", async () => {
   const response = await worker.fetch(new Request(
-    "https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live",
+    "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live",
     { headers: { Origin: "https://not-allowed.example" } },
   ), {
     API_ORIGIN: "https://darb-gps-x.onrender.com",
@@ -76,7 +76,7 @@ test("rejects origins not on the allowlist", async () => {
 
 test("fails closed when API_ORIGIN is missing", async () => {
   const response = await worker.fetch(new Request(
-    "https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live",
+    "https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live",
   ), {});
 
   assert.equal(response.status, 503);

@@ -26,6 +26,12 @@
 - Review/complete admin console, push notifications and monitoring; validate all API endpoints and UI contracts.
 - Verify Flutter builds/tests on Android/iOS and complete security review before merging/replacing production endpoint.
 
+
+## Cloudflare Git build status (PR branch)
+- The Cloudflare Git builds attached to PR #46 failed for the existing `darb-gps`, `darb-gps-web-2026`, and `darb-gps-new` services; the `darb-gps-free-api` native Worker was not deployed through those services.
+- Dashboard logs are account-protected; this session cannot retrieve the failure details. Links: `darb-gps` https://dash.cloudflare.com/2e1e8539dff6ddbc2308ef63cbefd3ad/workers/services/view/darb-gps/production/builds/b426524e-3ce7-42c9-b2c4-817ef7ba8cd4 ; `darb-gps-web-2026` https://dash.cloudflare.com/2e1e8539dff6ddbc2308ef63cbefd3ad/workers/services/view/darb-gps-web-2026/production/builds/5b07dd32-ad20-4429-9737-7fb85eaecb13 ; `darb-gps-new` https://dash.cloudflare.com/2e1e8539dff6ddbc2308ef63cbefd3ad/workers/services/view/darb-gps-new/production/builds/bd5e9422-f7b8-47f7-81e3-07e642fda32f .
+- These are build failures, not successful deployments; the staging PR does not change the production Flutter API URL or merge to `main`.
+
 ## Free-tier constraints and caveats
 - Readiness confirms required config values exist, not live Supabase connectivity.
 - Realtime fan-out is replaced by 10-second polling; update latency and request volume differ.

@@ -21,7 +21,7 @@ CI validates Node tests and Wrangler bundle.
 - `POST /api/v1/vehicles/:vehicleId/members`
 - `DELETE /api/v1/vehicles/:vehicleId/members/:memberUserId`
 
-Prototype routes now exist for create organization, create vehicle, and list vehicles using transaction-safe RPC functions. RPC SQL was syntax-tested against the live project in a transaction that was rolled back. Migration is staged only and not applied. Remaining: review/apply RPC migration, add real-project integration tests and membership add/revoke routes. Schema and role rules were verified read-only against the connected project.
+Prototype routes now exist for create organization, create vehicle, list vehicles, add vehicle member, and revoke vehicle member using transaction-safe RPC functions. RPC SQL was syntax-tested against the live project in a transaction that was rolled back. Migration is staged only and not applied. Remaining: review/apply RPC migration and add real API/Flutter integration tests. Schema and role rules were verified read-only against the connected project.
 
 ## Stage 2 — Mobile tracking and history (prototype routes implemented; SQL migrations staged)
 

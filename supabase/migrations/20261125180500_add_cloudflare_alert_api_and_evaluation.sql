@@ -1,5 +1,13 @@
 -- Alert evaluation and authenticated alert/rule API RPCs.
 
+CREATE OR REPLACE FUNCTION private.darb_haversine_distance(p_lat1 double precision,p_lon1 double precision,p_lat2 double precision,p_lon2 double precision)
+RETURNS double precision LANGUAGE sql IMMUTABLE SET search_path=''
+AS $
+ SELECT 6371000.0 * 2 * asin(sqrt(least(1.0,
+   sin(radians(p_lat2-p_lat1)/2)^2 + cos(radians(p_lat1))*cos(radians(p_lat2))*sin(radians(p_lon2-p_lon1)/2)^2
+  )))
+$;
+REVOKE ALL ON FUNCTION private.darb_haversine_distance(double precision,double precision,double precision,double precision) FROM PUBLIC,anon,authenticated;
 CREATE OR REPLACE FUNCTION private.darb_evaluate_location_alerts(p_location_id bigint)
 RETURNS integer
 LANGUAGE plpgsql
@@ -35,14 +43,8 @@ BEGIN
         v_message := format('تجاوزت المركبة الحد المحدد %s كم/س ووصلت إلى %s كم/س.',v_rule.config->>'limitKmh',round(v_location.speed_kmh));
       END IF;
     ELSIF v_rule.rule_type='geofence' AND v_previous.id IS NOT NULL THEN
-      v_inside_now := ST_DWithin(
-        ST_SetSRID(ST_MakePoint(v_location.longitude,v_location.latitude),4326)::geography,
-        ST_SetSRID(ST_MakePoint((v_rule.config->>'longitude')::double precision,(v_rule.config->>'latitude')::double precision),4326)::geography,
-        (v_rule.config->>'radiusMeters')::double precision);
-      v_inside_before := ST_DWithin(
-        ST_SetSRID(ST_MakePoint(v_previous.longitude,v_previous.latitude),4326)::geography,
-        ST_SetSRID(ST_MakePoint((v_rule.config->>'longitude')::double precision,(v_rule.config->>'latitude')::double precision),4326)::geography,
-        (v_rule.config->>'radiusMeters')::double precision);
+      v_inside_now := private.darb_haversine_distance(v_location.latitude,v_location.longitude,(v_rule.config->>'latitude')::double precision,(v_rule.config->>'longitude')::double precision) <= (v_rule.config->>'radiusMeters')::double precision;
+      v_inside_before := private.darb_haversine_distance(v_previous.latitude,v_previous.longitude,(v_rule.config->>'latitude')::double precision,(v_rule.config->>'longitude')::double precision) <= (v_rule.config->>'radiusMeters')::double precision;
       IF v_inside_now<>v_inside_before THEN
         v_alert_type := CASE WHEN v_inside_now THEN 'geofence_enter' ELSE 'geofence_exit' END;
         v_title := CASE WHEN v_inside_now THEN 'دخول نطاق جغرافي' ELSE 'خروج من نطاق جغرافي' END;

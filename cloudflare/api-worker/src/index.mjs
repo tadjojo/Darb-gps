@@ -169,6 +169,73 @@ export default {
         if (!response.ok) return json({ message: "Vehicle list unavailable" }, rpcErrorStatus(response, data), headers);
         return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
       }
+
+      if (url.pathname === "/api/v1/tracking/devices/enroll-mobile" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const vehicleId = typeof body?.vehicleId === "string" ? body.vehicleId : "";
+        if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_enroll_mobile_device", { p_vehicle_id: vehicleId }, authorization);
+        if (!response.ok) return json({ message: "Mobile enrollment failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 201, headers);
+      }
+
+      const deviceListMatch = url.pathname.match(new RegExp("^/api/v1/tracking/devices/vehicle/([^/]+)$"));
+      if (deviceListMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = deviceListMatch[1];
+        if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_list_devices", { p_vehicle_id: vehicleId }, authorization);
+        if (!response.ok) return json({ message: "Device list unavailable" }, rpcErrorStatus(response, data), headers);
+        return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/tracking/locations" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const vehicleId = typeof body?.vehicleId === "string" ? body.vehicleId : "";
+        const latitude = body?.latitude, longitude = body?.longitude;
+        const speedKmh = body?.speedKmh === undefined ? 0 : body.speedKmh;
+        const heading = body?.heading === undefined ? null : body.heading;
+        const accuracyMeters = body?.accuracyMeters === undefined ? null : body.accuracyMeters;
+        const recordedAt = typeof body?.recordedAt === "string" ? body.recordedAt : "";
+        const eventId = body?.eventId === undefined ? null : body.eventId;
+        const deviceId = body?.deviceId === undefined ? null : body.deviceId;
+        if (!UUID_RE.test(vehicleId) || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+            !Number.isFinite(speedKmh) || speedKmh < 0 || speedKmh > 500 ||
+            (heading !== null && (!Number.isFinite(heading) || heading < 0 || heading > 360)) ||
+            (accuracyMeters !== null && (!Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > 250)) ||
+            !recordedAt || !Number.isFinite(Date.parse(recordedAt)) ||
+            (eventId !== null && !UUID_RE.test(eventId)) || (deviceId !== null && !UUID_RE.test(deviceId))) {
+          return json({ message: "Invalid location payload or GPS accuracy" }, 400, headers);
+        }
+        const { response, data } = await supabaseRpc(env, "darb_api_ingest_mobile_location", {
+          p_vehicle_id: vehicleId, p_latitude: latitude, p_longitude: longitude,
+          p_speed_kmh: speedKmh, p_heading: heading, p_recorded_at: new Date(recordedAt).toISOString(),
+          p_event_id: eventId, p_device_id: deviceId, p_accuracy_meters: accuracyMeters,
+        }, authorization);
+        if (!response.ok) return json({ message: "Location ingestion failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      const latestMatch = url.pathname.match(new RegExp("^/api/v1/tracking/vehicles/([^/]+)/latest$"));
+      if (latestMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = latestMatch[1];
+        if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_latest_location", { p_vehicle_id: vehicleId }, authorization);
+        if (!response.ok) return json({ message: "Latest location unavailable" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

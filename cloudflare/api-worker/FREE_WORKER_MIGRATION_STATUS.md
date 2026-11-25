@@ -11,9 +11,9 @@ Branch `cloudflare-free-api-migration` contains a Worker-native scaffold intende
 - Transaction-safe SQL RPC migration is staged for these operations; syntax checked against the live project in a transaction that was rolled back (no persistent schema change).
 - Authenticated `/api/v1/auth/me` endpoint validates bearer tokens through Supabase Auth and returns a minimal profile (id/email/phone/role only).
 - Origin allow-list CORS.
-- Tests for health/readiness, CORS, login input validation, Supabase auth proxy happy-path (login/refresh/logout), and explicit 501 responses for unported routes.
+- 26 automated Worker tests cover health/readiness, CORS, login/refresh/logout/auth-me, organizations/vehicles, mobile enrollment, device listing, location validation/ingestion and latest-location routes.
 - Supabase logout uses local-session scope and is tested to forward the access-token bearer.
-- Latest Worker validation passed on commit `f091f596` (22 Node tests and Wrangler dry-run); mobile routes are now added with additional CI tests pending. Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
+- Latest Worker validation passed on commit `7d578a18` (26 Node tests and Wrangler dry-run). Later commits only updated migration documentation. Organization/vehicle and mobile RPC SQL were runtime-tested using a simulated authenticated role in rollback-only transactions; no test data remained.
 - No Cloudflare Containers dependency; no secrets or placeholder credentials in Wrangler config.
 
 ## Not migrated
@@ -31,5 +31,5 @@ Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` as Worker variables/secrets th
 ## Migration notes from backend/client review
 - Flutter client API contract expects organization/vehicle creation and listing, mobile enrollment, location ingestion/latest, device listing, trip/route/stop queries.
 - Existing backend uses PostgreSQL transactions and private-schema tables for tracking-device credential records; direct PostgREST calls are not a safe drop-in replacement.
-- Organization creation and vehicle enrollment/member actions need atomic database operations and explicit authorization. Plan to implement through reviewed Supabase SQL RPC functions or equivalent transactional routines, not multiple independent REST writes.
+- Organization, vehicle, and mobile tracking operations use staged transaction-safe RPCs with authorization derived from `auth.uid()`. Vehicle membership add/revoke and other tracking/admin routes remain unported.
 - Raw hardware tracker protocols (TCP/GT06/NMEA) cannot be hosted by a standard HTTP Worker fetch handler. Keep hardware ingest out of this Worker until a supported receiver/transport architecture is selected.

@@ -1,42 +1,57 @@
 # DARB GPS on Cloudflare
 
-## Current migration stage
+## Target deployment
 
-- The static dashboard is served by the Cloudflare Worker `darb-gps-web-2026` at `https://darb-gps-web-2026.tadjojo.workers.dev/`.
-- `cloudflare/api-worker` adds a Cloudflare Workers edge endpoint that forwards `/api/v1/*` requests to the existing Render API.
-- Supabase remains the system of record for PostgreSQL and authentication.
-- The GT06/NMEA TCP device gateway is not moved to Workers: GPS trackers require publicly reachable TCP listeners, which a normal Workers HTTP Worker does not provide.
+- Dashboard: Cloudflare Worker `darb-gps-web-2026` at https://darb-gps-web-2026.tadjojo.workers.dev/
+- HTTP API: Cloudflare Worker + Cloudflare Container `darb-gps-new` at https://darb-gps-new.tadjojo.workers.dev/
+- PostgreSQL and authentication: Supabase.
+- API runtime: the existing NestJS application and `api/Dockerfile`, built and run as a Cloudflare Container. No Render API proxy is used.
+- Device gateway: raw GT06/NMEA TCP is a separate deployment concern. Cloudflare Spectrum Worker-origin TCP requires a custom zone and an eligible paid plan; workers.dev alone is not a public raw-TCP listener.
 
-## Deploy the API edge Worker from the Cloudflare dashboard
+## Cloudflare Workers Builds settings for darb-gps-new
 
-1. Open Workers & Pages: https://dash.cloudflare.com/?to=/:account/workers-and-pages
-2. Choose **Create application** > **Workers** > **Import a repository**.
-3. Select `tadjojo/Darb-gps`, branch `main`.
-4. **Root directory: `cloudflare/api-worker`** (this is critical; do not use repository root or `api`).
-5. In build settings, set **Build command** to `npm install` (or leave it blank if Cloudflare offers an install-only default).
-6. Set **Deploy command** to `npx wrangler deploy`.
-7. If there is a separate **Build output directory**, leave it blank; this is a Worker deployment, not a static Pages build.
-8. Confirm the Worker name is `darb-gps-new` and deploy.
+Open Workers & Pages:
+https://dash.cloudflare.com/2e1e8539dff6ddbc2308ef63cbefd3ad/workers-and-pages
 
-**Do not use `npm run build`, `nest build`, or `api` as the root directory for this Worker.** Those settings try to build the NestJS API and cause unrelated TypeScript errors. Worker source is in `cloudflare/api-worker/src/index.mjs`.
+Connect `tadjojo/Darb-gps`, branch `main`, and set:
 
-Test after deployment:
-- `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live`
-- `https://darb-gps-new.tadjojo.workers.dev/api/v1/health/ready`
+1. Root directory: repository root (leave blank or use `/`). The Docker build context is `api/`, so do not set the root directory to `api` or `cloudflare/api-worker`.
+2. Build command: `npm install --prefix cloudflare/api-worker`
+3. Deploy command: `npx wrangler deploy --config cloudflare/api-worker/wrangler.toml`
+4. Build output directory: leave blank.
+5. Confirm Worker name `darb-gps-new`.
 
-The dashboard default API base is now `https://darb-gps-new.tadjojo.workers.dev/api/v1`. The API Worker must be successfully deployed and pass both health checks before login and authenticated features can work. If this browser has an older `darb_api` value saved in local storage, update it from Settings to the URL above.
+The Wrangler configuration builds `api/Dockerfile` with `api/` as its Docker build context, then routes API requests to the container on port 3000. This is a Cloudflare Containers deployment, not a static Pages build.
 
-## Next stages
+## Required Cloudflare secrets
 
-1. Deploy and verify this edge Worker.
-2. After both health checks pass, test login, organizations, vehicles, tracking, alerts, and CORS through the configured Worker URL.
-3. Move eligible HTTP API routes to native Workers gradually. The current NestJS/Express application cannot be copied to Workers unchanged.
-4. Deploy the TCP tracker gateway on a separate TCP-capable host; keep it independent from the HTTP API.
-5. Create a Cloudflare Pages project for the dashboard and verify it before changing or removing GitHub Pages/Render.
-6. Retire Oracle only after all required functions have a verified replacement.
+Before the API can pass readiness checks, add these Worker secrets in the `darb-gps-new` settings:
+
+- `DATABASE_URL`: Supabase PostgreSQL connection string (use the direct or pooler endpoint supported by your Supabase project).
+- `DATABASE_CA_CERT`: full PEM text of the Supabase CA certificate used by the database endpoint.
+- `SUPABASE_URL`: Supabase project URL.
+- `SUPABASE_PUBLISHABLE_KEY`: Supabase publishable/anon key.
+
+Do not place secrets in Git or send them in chat. Optional non-secret variables are already defaulted by the Worker: `DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`, and `DB_CONNECTION_TIMEOUT_MS`.
+
+## Verification
+
+After the first successful Cloudflare build and container rollout, open:
+
+- https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live
+- https://darb-gps-new.tadjojo.workers.dev/api/v1/health/ready
+
+The first request can return HTTP 503 while the container starts. Retry after a short wait. The ready endpoint must report the database as connected before testing login, organizations, vehicles, tracking, alerts, and realtime Socket.IO.
+
+The web dashboard already defaults to:
+`https://darb-gps-new.tadjojo.workers.dev/api/v1`
+
+## GPS tracker TCP gateway
+
+The GT06/NMEA gateway is not an HTTP Worker. Cloudflare's inbound TCP-to-Worker feature is currently a public beta and requires a Cloudflare Spectrum application on an eligible custom domain/zone and plan. The standard `*.workers.dev` hostname is not enough to expose arbitrary tracker TCP ports. Do not point trackers at the HTTP API URL.
 
 ## Security
 
-- Never commit Cloudflare API tokens, Supabase service-role keys, database passwords, or tracker bearer tokens.
-- Configure secrets in Cloudflare/GitHub's secret manager, not in source files.
-- Keep the old API and gateway online until cutover tests pass.
+- Never commit Cloudflare API tokens, Supabase service-role keys, database passwords, CA private keys, or tracker bearer tokens.
+- Configure credentials as Cloudflare Worker secrets.
+- Keep the old service available only until Cloudflare health, authentication, database, realtime, and device ingestion tests pass; then retire it deliberately.

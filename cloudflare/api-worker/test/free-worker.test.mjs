@@ -8,19 +8,43 @@ const env = {
   SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
 };
 
-test("health endpoint responds with Worker runtime status", async () => {
+test("liveness reports runtime is up", async () => {
   const res = await worker.fetch(new Request("https://worker.test/api/v1/health/live"), env);
   assert.equal(res.status, 200);
   const payload = await res.json();
+  assert.equal(payload.status, "ok");
   assert.equal(payload.runtime, "cloudflare-worker");
-  assert.equal(payload.freePlanCompatible, true);
+});
+
+test("readiness reports missing config as not ready", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/health/ready"), {});
+  assert.equal(res.status, 503);
+  assert.equal((await res.json()).status, "not_ready");
+});
+
+test("readiness only confirms configured settings, not database connectivity", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/health/ready"), env);
+  assert.equal(res.status, 200);
+  const payload = await res.json();
+  assert.equal(payload.status, "ready");
+  assert.equal(payload.supabaseConfigured, true);
+  assert.match(payload.note, /no database connectivity test/);
 });
 
 test("CORS denies unapproved origins", async () => {
   const res = await worker.fetch(new Request("https://worker.test/api/v1/health/live", {
-    headers: { Origin: "https://evil.example" },
+    headers: { Origin: "https://malicious.example" },
   }), env);
   assert.equal(res.status, 403);
+});
+
+test("CORS preflight for approved origin", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+    method: "OPTIONS",
+    headers: { Origin: "https://darb-gps-web-2026.tadjojo.workers.dev" },
+  }), env);
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get("Access-Control-Allow-Origin"), "https://darb-gps-web-2026.tadjojo.workers.dev");
 });
 
 test("unmigrated API routes are explicit and not falsely successful", async () => {
@@ -28,4 +52,13 @@ test("unmigrated API routes are explicit and not falsely successful", async () =
   assert.equal(res.status, 501);
   const payload = await res.json();
   assert.equal(payload.status, "not_implemented");
+});
+
+test("login validates required fields before contacting Supabase", async () => {
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identifier: "", password: "" }),
+  }), env);
+  assert.equal(res.status, 400);
 });

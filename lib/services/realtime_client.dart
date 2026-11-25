@@ -92,13 +92,17 @@ class DarbRealtimeClient {
     _timer?.cancel();
     _timer = null;
     _polling = false;
+    _setConnection(false);
     _baseUrl = null;
     _accessToken = null;
     _vehicleId = null;
     _lastLocationKey = null;
     _onLocation = null;
     _onConnection = null;
-    _connected = false;
+  }
+
+  void dispose() {
+    disconnect();
     if (_ownsClient) _client.close();
   }
 }

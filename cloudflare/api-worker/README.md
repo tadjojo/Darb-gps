@@ -13,7 +13,7 @@ This Worker is an incremental migration target for the DARB GPS API. **It is not
 | `/api/v1/auth/logout` | POST | Local session sign-out using bearer token |
 | `/api/v1/auth/me` | GET | Bearer validation and minimal user profile |
 
-Other API routes return HTTP 501 and are intentionally not claimed to be migrated.
+Routes for alerts, raw TCP reception, Socket.IO realtime, device membership, and admin remain unported and return HTTP 501.
 
 ## Required Cloudflare settings
 

@@ -33,7 +33,7 @@ function json(data, status, headers) {
   h.set("X-Content-Type-Options", "nosniff");
   h.set("Referrer-Policy", "no-referrer");
   h.set("X-Frame-Options", "DENY");
-  h.set("Content-Security-Policy", "default-src \'none\'; frame-ancestors \'none\;");
+  h.set("Content-Security-Policy", "default-src none; frame-ancestors none;");
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 

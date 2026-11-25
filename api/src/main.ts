@@ -1,4 +1,3 @@
-
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
@@ -18,14 +17,12 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   app.enableCors({
-    origin: (process.env.CORS_ORIGINS ?? 'https://darb-gps-web.onrender.com,https://tadjojo.github.io').split(',').map(value => value.trim()),
+    origin: (process.env.CORS_ORIGINS ?? 'https://darb-gps-web-2026.tadjojo.workers.dev,https://tadjojo.github.io').split(',').map(value => value.trim()),
     credentials: true,
   });
 
   const port = process.env.PORT || 3000;
-
   await app.listen(port, '0.0.0.0');
-
   console.log(`DARB GPS API running on port ${port}`);
 }
 

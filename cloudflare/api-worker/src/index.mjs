@@ -79,6 +79,7 @@ function parseNmeaSentence(sentence) {
   if (!Number.isInteger(quality)||quality<1||quality>8||!Number.isInteger(satellites)||satellites<0||satellites>99||!Number.isFinite(altitude)) throw new Error("Invalid NMEA GGA quality data");
   return {sentence:"GGA",latitude:coordinate(fields[2],fields[3],2,90),longitude:coordinate(fields[4],fields[5],3,180),satellites,fixQuality:quality,altitudeMeters:altitude};
 }
+// HTTPS frame adapter: validate CRC, then decode the common GT06 0x12 location profile.
 function parseGt06LocationFrame(frameHex) {
   if (typeof frameHex !== "string" || frameHex.length < 20 || frameHex.length > 520 || frameHex.length % 2 || !/^[0-9a-f]+$/i.test(frameHex)) throw new Error("Invalid GT06 hex frame");
   const bytes = Uint8Array.from(frameHex.match(/.{2}/g), (pair) => Number.parseInt(pair,16));

@@ -12,14 +12,19 @@
 1. Open Workers & Pages: https://dash.cloudflare.com/?to=/:account/workers-and-pages
 2. Choose **Create application** > **Workers** > **Import a repository**.
 3. Select `tadjojo/Darb-gps`, branch `main`.
-4. Set the root directory to `cloudflare/api-worker`.
-5. Set the build/deploy command to `npm install && npm run deploy` and leave the build command empty if the UI separates build and deploy commands.
-6. Confirm the Worker name is `darb-gps-api-edge` and deploy.
-7. Test:
-   - `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live`
-   - `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/ready`
+4. **Root directory: `cloudflare/api-worker`** (this is critical; do not use repository root or `api`).
+5. In build settings, set **Build command** to `npm install` (or leave it blank if Cloudflare offers an install-only default).
+6. Set **Deploy command** to `npx wrangler deploy`.
+7. If there is a separate **Build output directory**, leave it blank; this is a Worker deployment, not a static Pages build.
+8. Confirm the Worker name is `darb-gps-api-edge` and deploy.
 
-Do not change the dashboard's API base URL until both health checks pass and the authenticated smoke tests pass through the Worker.
+**Do not use `npm run build`, `nest build`, or `api` as the root directory for this Worker.** Those settings try to build the NestJS API and cause unrelated TypeScript errors. Worker source is in `cloudflare/api-worker/src/index.mjs`.
+
+Test after deployment:
+- `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/live`
+- `https://darb-gps-api-edge.tadjojo.workers.dev/api/v1/health/ready`
+
+Do not change the dashboard's API base URL until both health checks pass and authenticated smoke tests pass through the Worker.
 
 ## Next stages
 

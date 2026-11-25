@@ -28,9 +28,9 @@ Incremental migration target for DARB GPS. **Not a production replacement.** Kee
 | `/api/v1/device-gateway/ingest` | POST | JSON tracker telemetry |
 | `/api/v1/device-gateway/heartbeat/gt06` | POST | GT06 heartbeat |
 | `/api/v1/device-gateway/ingest/nmea` | POST | NMEA HTTPS adapter |
-| `/api/v1/device-gateway/ingest/gt06` | POST | GT06 HTTPS adapter |
+| `/api/v1/device-gateway/ingest/gt06` | POST | GT06 HTTPS adapter |\n| `/api/v1/alerts` | GET | List/filter alerts |\n| `/api/v1/alerts/:id/acknowledge` | PATCH | Acknowledge alert |\n| `/api/v1/alerts/:id/resolve` | PATCH | Resolve alert |\n| `/api/v1/alerts/rules` | GET/POST | List/create alert rules |
 
-Unported: vehicle membership add/remove, alert rules/evaluation and API, Socket.IO realtime, admin, and raw TCP device reception. Unported routes explicitly return HTTP 501.
+Unported: Socket.IO realtime, admin, and raw TCP device reception. Unported routes explicitly return HTTP 501.
 
 ## Required Cloudflare variables/secrets
 

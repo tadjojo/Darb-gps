@@ -109,7 +109,7 @@ async function supabaseRpc(env, functionName, args, authorization) {
 async function generateTrackerCredential() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const secret = btoa(String.fromCharCode(...bytes)).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  const secret = btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
   const hash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
   return { secret, hash };
@@ -118,7 +118,8 @@ function rpcErrorStatus(response, data) {
   if (response.status === 401) return 401;
   if (response.status === 403 || data?.code === "42501") return 403;
   if (response.status === 404 || data?.code === "P0002") return 404;
-  if (response.status === 409 || data?.code === "23505") return 409;\n  if (response.status === 400 || ["22023", "23514"].includes(data?.code)) return 400;
+  if (response.status === 409 || data?.code === "23505") return 409;
+  if (response.status === 400 || ["22023", "23514"].includes(data?.code)) return 400;
   return 502;
 }
 

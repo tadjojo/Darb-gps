@@ -36,13 +36,13 @@ Prototype routes now exist for create organization, create vehicle, and list veh
 
 Prototype routes now exist for mobile enrollment, device listing, location ingestion, latest location, history, trips, trip route, and stop detection. The location-history RPC and mobile RPCs were tested under simulated authenticated role in rollback-only transactions. Remaining: alerts evaluation and realtime fan-out; location ingestion is not yet wired to Socket.IO/realtime. Migrations are staged, not applied.
 
-## Stage 3 — Hardware tracking device administration
+## Stage 3 — Hardware tracking device administration and HTTPS protocol adapters (prototype routes implemented; SQL migration staged)
 
 - GPS device enrollment, credential rotation, revocation, and device list.
 - Protocol profiles: JSON, GT06, NMEA; IMEI validation and time-zone handling.
 - Hardware credentials are stored hashed and in private schema. Never expose private credential hashes or secrets in API output.
 
-Required prerequisite: define receiver/transport and authentication contract. Raw TCP protocols cannot be received by a normal Worker HTTP handler; hardware gateway remains separate unless a supported transport is chosen.
+Prototype routes now include GPS tracker enrollment with one-time random credential, rotation/revocation, credential-hash JSON ingestion, GT06 heartbeat, and HTTPS adapters for GT06 frames and NMEA sentences. SQL functions were rollback-tested. Raw TCP receiving still needs a separate gateway, and these migrations have not been applied.
 
 ## Stage 4 — Alerts and rules
 

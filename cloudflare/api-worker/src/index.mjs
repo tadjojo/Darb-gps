@@ -158,7 +158,7 @@ export default {
         return json(data, 201, headers);
       }
 
-      const vehicleListMatch = url.pathname.match(/^\\/api\\/v1\\/organizations\\/([^/]+)\\/vehicles$/);
+            const vehicleListMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/vehicles$"));
       if (vehicleListMatch && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

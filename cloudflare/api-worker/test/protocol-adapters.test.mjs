@@ -24,3 +24,15 @@ test("GT06 HTTPS adapter validates frame CRC and applies configured UTC offset",
  globalThis.fetch=async(_i,init={})=>{calls++;const args=JSON.parse(init.body||"{}");if(calls===1){profileArgs=args;return new Response(JSON.stringify({protocol:"gt06",timezone_offset_minutes:180}),{status:200});}ingestArgs=args;return new Response(JSON.stringify({accepted:true,duplicate:false}),{status:200});};
  try{const frame=gt06Frame();const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,200);assert.equal(calls,2);assert.equal(profileArgs.p_credential_hash,await sha("tracker-secret"));assert.equal(ingestArgs.p_protocol,"gt06");assert.equal(ingestArgs.p_latitude,31.95);assert.equal(ingestArgs.p_longitude,35.91);assert.equal(ingestArgs.p_recorded_at,"2026-11-25T07:00:00.000Z");}finally{globalThis.fetch=old;}
 });
+
+
+test("GT06 adapter rejects a corrupted CRC frame",async()=>{
+ const old=globalThis.fetch;let calls=0;
+ globalThis.fetch=async()=>{calls++;return new Response(JSON.stringify({protocol:"gt06",timezone_offset_minutes:180}),{status:200});};
+ try{const frame=gt06Frame().slice(0,-4)+"0000"+gt06Frame().slice(-4);const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,400);assert.equal(calls,1);}finally{globalThis.fetch=old;}
+});
+
+test("NMEA adapter rejects credentials enrolled for another protocol",async()=>{
+ const old=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({protocol:"json"}),{status:200});
+ try{const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/nmea",{method:"POST",headers:auth,body:JSON.stringify({sentence:sentence("GPRMC,100000.00,A,3157.234,N,03554.123,E,10.0,90.0,251126,,,A")})}),env);assert.equal(res.status,400);}finally{globalThis.fetch=old;}
+});

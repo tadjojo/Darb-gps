@@ -45,3 +45,8 @@ The staged organization/vehicle and mobile RPC definitions were temporarily inst
 ## Rollback-only location-history functional test
 
 The staged scoped location-history RPC was tested in a rollback-only transaction by creating a test organization, vehicle, and three timestamped locations under an authenticated-role context, then verifying the RPC returned three ordered points. The transaction was rolled back and a follow-up query confirmed no test organization remained. No production data was added.
+
+
+## Hardware RPC verification
+
+Tracker provisioning, rotation, revocation, profile lookup, JSON telemetry, duplicate-event handling, and GT06 heartbeat were exercised in rollback-only transactions under the authenticated/service roles. Profile lookup and tracker protocol credential checks were also validated; no test organization/device/location rows remain. The Worker adapter tests validate NMEA RMC checksum/time/coordinate normalization and GT06 frame CRC/location/timezone normalization. All migrations remain staged, not applied.

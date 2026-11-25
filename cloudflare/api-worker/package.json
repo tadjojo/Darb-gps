@@ -1,5 +1,5 @@
 {
-  "name": "darb-gps-api-edge",
+  "name": "darb-gps-cloudflare-api",
   "private": true,
   "version": "1.0.0",
   "scripts": {
@@ -7,6 +7,9 @@
     "deploy": "wrangler deploy",
     "check": "wrangler deploy --dry-run",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.0"
   },
   "devDependencies": {
     "wrangler": "4.50.0"

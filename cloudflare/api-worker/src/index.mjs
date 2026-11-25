@@ -29,6 +29,60 @@ function json(data, status, headers) {
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 
+
+function parseLimit(value, fallback, min, max) {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (!/^\\d+$/.test(value)) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= min && n <= max ? n : null;
+}
+function parseRange(url, required = true, maxDays = 31) {
+  const fromRaw = url.searchParams.get("from"), toRaw = url.searchParams.get("to");
+  if (required && (!fromRaw || !toRaw)) return null;
+  const from = fromRaw ? Date.parse(fromRaw) : null, to = toRaw ? Date.parse(toRaw) : null;
+  if ((fromRaw && !Number.isFinite(from)) || (toRaw && !Number.isFinite(to)) ||
+      (from !== null && to !== null && from >= to) ||
+      (maxDays > 0 && from !== null && to !== null && to - from > maxDays * 86400000)) return null;
+  return { from: from === null ? null : new Date(from).toISOString(), to: to === null ? null : new Date(to).toISOString() };
+}
+function haversineMeters(a, b) {
+  const rad = (n) => n * Math.PI / 180;
+  const dLat = rad(Number(b.latitude) - Number(a.latitude)), dLon = rad(Number(b.longitude) - Number(a.longitude));
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(Number(a.latitude))) * Math.cos(rad(Number(b.latitude))) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function makeTrips(points, limit) {
+  const trips = []; let segment = [];
+  const flush = () => {
+    if (segment.length >= 2) {
+      let meters = 0;
+      for (let i = 1; i < segment.length; i++) meters += haversineMeters(segment[i - 1], segment[i]);
+      trips.push({ id: String(segment[0].id), device_id: "all", start_at: segment[0].recorded_at, end_at: segment[segment.length - 1].recorded_at, distance_meters: Math.round(meters), points_count: segment.length });
+    }
+    segment = [];
+  };
+  for (const point of points) {
+    if (segment.length && Date.parse(point.recorded_at) - Date.parse(segment[segment.length - 1].recorded_at) > 30 * 60000) flush();
+    segment.push(point);
+  }
+  flush(); return trips.reverse().slice(0, limit);
+}
+function makeStops(points, limit) {
+  const stops = []; let segment = [];
+  const flush = () => {
+    if (segment.length >= 2) {
+      const duration = (Date.parse(segment[segment.length - 1].recorded_at) - Date.parse(segment[0].recorded_at)) / 1000;
+      if (duration >= 300) stops.push({ start_at: segment[0].recorded_at, duration_seconds: Math.round(duration), points_count: segment.length, latitude: Number(segment[0].latitude), longitude: Number(segment[0].longitude) });
+    }
+    segment = [];
+  };
+  for (const point of points) {
+    const stopped = Number(point.speed_kmh ?? 0) <= 3;
+    if (!stopped || (segment.length && Date.parse(point.recorded_at) - Date.parse(segment[segment.length - 1].recorded_at) > 10 * 60000)) flush();
+    if (stopped) segment.push(point);
+  }
+  flush(); return stops.reverse().slice(0, limit);
+}
 function supabaseConfigured(env) {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY);
 }
@@ -235,6 +289,57 @@ export default {
         const { response, data } = await supabaseRpc(env, "darb_api_latest_location", { p_vehicle_id: vehicleId }, authorization);
         if (!response.ok) return json({ message: "Latest location unavailable" }, rpcErrorStatus(response, data), headers);
         return json(data, 200, headers);
+      }
+
+      const historyMatch = url.pathname.match(new RegExp("^/api/v1/tracking/vehicles/([^/]+)/history$"));
+      if (historyMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = historyMatch[1]; if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const range = parseRange(url, false, 0); if (!range) return json({ message: "Invalid history range" }, 400, headers);
+        const limit = parseLimit(url.searchParams.get("limit"), 500, 1, 2000); if (limit === null) return json({ message: "History limit must be 1..2000" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_location_points", { p_vehicle_id: vehicleId, p_from: range.from, p_to: range.to, p_limit: limit, p_order_desc: true, p_max_days: 0 }, authorization);
+        if (!response.ok) return json({ message: "History unavailable" }, rpcErrorStatus(response, data), headers);
+        return json(Array.isArray(data) ? data : [], 200, headers);
+      }
+
+      const tripsMatch = url.pathname.match(new RegExp("^/api/v1/tracking/vehicles/([^/]+)/trips$"));
+      if (tripsMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = tripsMatch[1]; if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const range = parseRange(url, true, 31); if (!range) return json({ message: "Invalid trip date range; maximum range is 31 days" }, 400, headers);
+        const limit = parseLimit(url.searchParams.get("limit"), 50, 1, 100); if (limit === null) return json({ message: "Trip limit must be 1..100" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_location_points", { p_vehicle_id: vehicleId, p_from: range.from, p_to: range.to, p_limit: 10000, p_order_desc: false, p_max_days: 31 }, authorization);
+        if (!response.ok) return json({ message: "Trips unavailable" }, rpcErrorStatus(response, data), headers);
+        return json({ data: makeTrips(Array.isArray(data) ? data : [], limit) }, 200, headers);
+      }
+
+      const routeMatch = url.pathname.match(new RegExp("^/api/v1/tracking/vehicles/([^/]+)/trip-route$"));
+      if (routeMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = routeMatch[1]; if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const range = parseRange(url, true, 31); if (!range) return json({ message: "Invalid route date range" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_location_points", { p_vehicle_id: vehicleId, p_from: range.from, p_to: range.to, p_limit: 10000, p_order_desc: false, p_max_days: 31 }, authorization);
+        if (!response.ok) return json({ message: "Trip route unavailable" }, rpcErrorStatus(response, data), headers);
+        return json(Array.isArray(data) ? data : [], 200, headers);
+      }
+
+      const stopsMatch = url.pathname.match(new RegExp("^/api/v1/tracking/vehicles/([^/]+)/stops$"));
+      if (stopsMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = stopsMatch[1]; if (!UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const range = parseRange(url, true, 31); if (!range) return json({ message: "Invalid stop date range" }, 400, headers);
+        const limit = parseLimit(url.searchParams.get("limit"), 100, 1, 500); if (limit === null) return json({ message: "Stop limit must be 1..500" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_location_points", { p_vehicle_id: vehicleId, p_from: range.from, p_to: range.to, p_limit: 10000, p_order_desc: false, p_max_days: 31 }, authorization);
+        if (!response.ok) return json({ message: "Stops unavailable" }, rpcErrorStatus(response, data), headers);
+        return json({ data: makeStops(Array.isArray(data) ? data : [], limit) }, 200, headers);
       }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";

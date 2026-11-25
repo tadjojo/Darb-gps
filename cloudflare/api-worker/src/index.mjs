@@ -589,6 +589,68 @@ export default {
         if (!response.ok) return json({ message: "Member revocation failed" }, rpcErrorStatus(response, data), headers);
         return json(data, 200, headers);
       }
+
+      if (url.pathname === "/api/v1/alerts" && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const status = url.searchParams.get("status"), vehicleId = url.searchParams.get("vehicleId");
+        const limit = parseLimit(url.searchParams.get("limit"), 100, 1, 200);
+        if (limit === null || (status !== null && !["open","acknowledged","resolved"].includes(status)) || (vehicleId !== null && !UUID_RE.test(vehicleId))) return json({ message: "Invalid alert filter or limit" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_list_alerts", { p_status: status, p_vehicle_id: vehicleId, p_limit: limit }, authorization);
+        if (!response.ok) return json({ message: "Alerts unavailable" }, rpcErrorStatus(response, data), headers);
+        return json(Array.isArray(data) ? data : [], 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/alerts/rules" && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const vehicleId = url.searchParams.get("vehicleId");
+        if (vehicleId !== null && !UUID_RE.test(vehicleId)) return json({ message: "Invalid vehicle ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_list_alert_rules", { p_vehicle_id: vehicleId }, authorization);
+        if (!response.ok) return json({ message: "Alert rules unavailable" }, rpcErrorStatus(response, data), headers);
+        return json(Array.isArray(data) ? data : [], 200, headers);
+      }
+
+      if (url.pathname === "/api/v1/alerts/rules" && request.method === "POST") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const body = await request.json().catch(() => null);
+        const vehicleId = typeof body?.vehicleId === "string" ? body.vehicleId : "";
+        const type = body?.type, name = typeof body?.name === "string" ? body.name.trim() : "", config = body?.config;
+        const enabled = body?.enabled === undefined ? true : body.enabled;
+        let validConfig = false;
+        if (type === "speed_limit") validConfig = Number.isFinite(config?.limitKmh) && config.limitKmh >= 1 && config.limitKmh <= 300;
+        if (type === "geofence") validConfig = Number.isFinite(config?.latitude) && config.latitude >= -90 && config.latitude <= 90 && Number.isFinite(config?.longitude) && config.longitude >= -180 && config.longitude <= 180 && Number.isFinite(config?.radiusMeters) && config.radiusMeters >= 25 && config.radiusMeters <= 100000;
+        if (!UUID_RE.test(vehicleId) || !["speed_limit","geofence"].includes(type) || !name || name.length > 120 || !validConfig || typeof enabled !== "boolean") return json({ message: "Invalid alert rule payload" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_create_alert_rule", { p_vehicle_id: vehicleId, p_type: type, p_name: name, p_config: config, p_enabled: enabled }, authorization);
+        if (!response.ok) return json({ message: "Alert rule creation failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 201, headers);
+      }
+
+      const acknowledgeMatch = url.pathname.match(new RegExp("^/api/v1/alerts/([^/]+)/acknowledge$"));
+      if (acknowledgeMatch && request.method === "PATCH") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const alertId = acknowledgeMatch[1]; if (!UUID_RE.test(alertId)) return json({ message: "Invalid alert ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_acknowledge_alert", { p_alert_id: alertId }, authorization);
+        if (!response.ok) return json({ message: "Alert acknowledgement failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
+
+      const resolveMatch = url.pathname.match(new RegExp("^/api/v1/alerts/([^/]+)/resolve$"));
+      if (resolveMatch && request.method === "PATCH") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const alertId = resolveMatch[1]; if (!UUID_RE.test(alertId)) return json({ message: "Invalid alert ID" }, 400, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_resolve_alert", { p_alert_id: alertId }, authorization);
+        if (!response.ok) return json({ message: "Alert resolution failed" }, rpcErrorStatus(response, data), headers);
+        return json(data, 200, headers);
+      }
       if (url.pathname === "/api/v1/auth/me" && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

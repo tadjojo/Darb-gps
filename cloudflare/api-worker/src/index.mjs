@@ -565,7 +565,8 @@ export default {
         return json(data, 200, headers);
       }
 
-      // Vehicle membership RPC routes validate organization and vehicle roles server-side.\n      const addMemberMatch = url.pathname.match(new RegExp("^/api/v1/vehicles/([^/]+)/members$"));
+      // Vehicle membership RPC routes validate organization and vehicle roles server-side.
+      const addMemberMatch = url.pathname.match(new RegExp("^/api/v1/vehicles/([^/]+)/members$"));
       if (addMemberMatch && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

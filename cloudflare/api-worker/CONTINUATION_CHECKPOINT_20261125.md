@@ -51,3 +51,7 @@ All four PR workflows completed successfully:
 - Updated Cloudflare guide to describe Free Workers/Pages migration as the target; legacy NestJS Container requires paid plan and remains separate.
 - Worker validation on commit `0b151531` passed (55 tests + Wrangler dry-run). Subsequent code adds authenticated API throttling and one test; the current test suite has 56 tests and CI is being rechecked on the current head.
 - Neither staging workflow has been run; Cloudflare credentials are not connected in this session. Production remains unchanged.
+
+## Web dashboard compatibility work
+- Static dashboard now accepts the Worker vehicle-list envelope `{data:[...]}`, unwraps trip/stop/device envelopes, and uses REST latest-location polling (60-second cadence) for the free Worker instead of repeatedly attempting Socket.IO. This cadence is intended to keep Free-plan request usage bounded; tune it in staging based on fleet size and usage.
+- JavaScript syntax and Pages asset-bundle validation are now part of the static dashboard CI workflow.

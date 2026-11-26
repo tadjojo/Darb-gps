@@ -24,7 +24,7 @@ Configure in Cloudflare staging Worker settings:
 - `SUPABASE_URL` — Supabase project URL (non-secret variable)
 - `SUPABASE_PUBLISHABLE_KEY` — publishable key
 - `SUPABASE_SERVICE_ROLE_KEY` — **secret**, only for server-side hardware tracker RPC operations
-- `ALLOWED_ORIGINS` — comma-separated explicit origin allow-list; validate actual staging web origin
+- `ALLOWED_ORIGINS` — comma-separated explicit origin allow-list. Wrangler config includes `https://staging.darb-gps-web-staging.pages.dev`; verify that the actual preview origin matches.
 
 ## Database and cutover safety
 - SQL files under `supabase/migrations` are staged only; do not apply to production.

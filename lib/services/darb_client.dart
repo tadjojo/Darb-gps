@@ -125,6 +125,13 @@ class DarbClient {
     return response;
   }
 
+  Future<List<Map<String, dynamic>>> listOrganizations() async {
+    final response = await authorized('GET', '/api/v1/organizations');
+    final value = _decode(response);
+    final rows = value['data'];
+    return rows is List ? rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
+  }
+
   Future<Map<String, dynamic>> createOrganization(String name) async {
     final response = await authorized('POST', '/api/v1/organizations', body: {'name': name});
     return _decode(response);

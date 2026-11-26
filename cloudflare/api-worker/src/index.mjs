@@ -380,20 +380,24 @@ export default {
         return json(data, 201, headers);
       }
 
-            const orgLatestLocationsMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/locations/latest$"));
+      const orgLatestLocationsMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/locations/latest$"));
       if (orgLatestLocationsMatch && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
         if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const limit = parseLimit(url.searchParams.get("limit"), 250, 1, 500);
+        const offset = parseLimit(url.searchParams.get("offset"), 0, 0, 1000000);
+        if (limit === null || offset === null) return json({ message: "Invalid pagination parameters" }, 400, headers);
         const organizationId = decodeURIComponent(orgLatestLocationsMatch[1]);
         const { response, data } = await supabaseRpc(
           env,
           "darb_api_latest_locations_for_organization",
-          { p_organization_id: organizationId },
+          { p_organization_id: organizationId, p_limit: limit, p_offset: offset },
           authorization,
         );
         if (!response.ok) return json({ message: "Latest organization locations request failed" }, rpcErrorStatus(response, data), headers);
-        return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
+        if (!data || !Array.isArray(data.data)) return json({ message: "Invalid latest locations response" }, 502, headers);
+        return json({ data: data.data, nextOffset: Number.isInteger(data.nextOffset) ? data.nextOffset : null }, 200, headers);
       }
 
       const vehicleListMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/vehicles$"));

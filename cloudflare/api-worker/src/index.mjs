@@ -167,6 +167,22 @@ function supabaseConfigured(env) {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY);
 }
 
+function rateLimitKeyForIp(request) {
+  return request.headers.get("CF-Connecting-IP") || request.headers.get("cf-connecting-ip") || "unknown-ip";
+}
+async function rateLimitResponse(binding, key, headers) {
+  if (!binding || typeof binding.limit !== "function") return null;
+  try {
+    const decision = await binding.limit({ key });
+    if (decision?.success) return null;
+  } catch {
+    // Fail closed: a configured limiter error should not silently disable protection.
+  }
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set("Retry-After", "60");
+  return json({ message: "Rate limit exceeded; retry after 60 seconds" }, 429, responseHeaders);
+}
+
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -290,6 +306,8 @@ export default {
 
     try {
       if (url.pathname === "/api/v1/auth/login" && request.method === "POST") {
+        const limited = await rateLimitResponse(env.AUTH_RATE_LIMIT, `login:${rateLimitKeyForIp(request)}`, headers);
+        if (limited) return limited;
         const body = await request.json().catch(() => null);
         const identifier = String(body?.identifier || "").trim();
         const password = body?.password;
@@ -303,6 +321,8 @@ export default {
       }
 
       if (url.pathname === "/api/v1/auth/refresh" && request.method === "POST") {
+        const limited = await rateLimitResponse(env.AUTH_RATE_LIMIT, `refresh:${rateLimitKeyForIp(request)}`, headers);
+        if (limited) return limited;
         const body = await request.json().catch(() => null);
         if (!body?.refreshToken) return json({ message: "Refresh token is required" }, 400, headers);
         const { response, body: auth } = await supabaseAuth(env, "/auth/v1/token?grant_type=refresh_token", { refresh_token: body.refreshToken });
@@ -535,6 +555,8 @@ export default {
         const authorization = request.headers.get("Authorization") || "";
         const credentialHash = await hashTrackerBearer(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
+        if (limited) return limited;
         if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
         const body = await request.json().catch(() => null);
         const latitude = body?.latitude, longitude = body?.longitude;
@@ -562,6 +584,8 @@ export default {
         const authorization = request.headers.get("Authorization") || "";
         const credentialHash = await hashTrackerBearer(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
+        if (limited) return limited;
         if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
         const { response, data } = await supabaseServiceRpc(env, "darb_api_tracker_heartbeat", { p_credential_hash: credentialHash, p_protocol: "gt06" });
         if (!response.ok) return json({ message: "Tracker heartbeat rejected" }, rpcErrorStatus(response, data), headers);
@@ -572,6 +596,8 @@ export default {
         const authorization = request.headers.get("Authorization") || "";
         const credentialHash = await hashTrackerBearer(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
+        if (limited) return limited;
         if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
         const body = await request.json().catch(() => null);
         if (typeof body?.sentence !== "string" || body.sentence.length > 256 || (body.pairedUtcTimestamp !== undefined && (typeof body.pairedUtcTimestamp !== "string" || !Number.isFinite(Date.parse(body.pairedUtcTimestamp))))) return json({ message: "Invalid NMEA payload" }, 400, headers);
@@ -590,6 +616,8 @@ export default {
         const authorization = request.headers.get("Authorization") || "";
         const credentialHash = await hashTrackerBearer(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
+        const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
+        if (limited) return limited;
         if (!serviceConfigured(env)) return json({ message: "Tracker ingestion service is not configured" }, 503, headers);
         const body = await request.json().catch(() => null);
         if (typeof body?.frameHex !== "string") return json({ message: "Invalid GT06 frame payload" }, 400, headers);

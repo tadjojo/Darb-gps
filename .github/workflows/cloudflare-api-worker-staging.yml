@@ -45,3 +45,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke-test deployed Worker liveness
+        run: |
+          subdomain=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);if(j.success&&j.result?.subdomain)process.stdout.write(j.result.subdomain);else process.exit(2);})")
+          test -n "$subdomain"
+          api_url="https://darb-gps-free-api.$subdomain.workers.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$api_url/api/v1/health/live"
+          echo "Staging Worker liveness passed at $api_url"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

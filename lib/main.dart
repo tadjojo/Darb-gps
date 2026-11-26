@@ -109,7 +109,7 @@ class _HomePageState extends State<HomePage> {
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
     if (mounted) setState(() {});
-    if (loggedIn) { try { await _loadOrganizations(); } catch (_) { if (vehicleId != null) await _connectRealtime(); } }
+    if (loggedIn) { final loaded = await _loadOrganizations(); if (!loaded && vehicleId != null) await _connectRealtime(); }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
       if (!loggedIn) return;
@@ -140,13 +140,14 @@ class _HomePageState extends State<HomePage> {
       await api.login(_identifier.text, _password.text);
       if (!mounted) return;
       setState(() { loggedIn = true; message = tr('تم تسجيل الدخول بأمان', 'Signed in securely'); });
-      await _loadOrganizations();
+      final loaded = await _loadOrganizations();
+      if (!loaded && vehicleId != null) await _connectRealtime();
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => busy = false); }
   }
 
-  Future<void> _loadOrganizations() async {
-    if (!loggedIn || loadingOrganizations) return;
+  Future<bool> _loadOrganizations() async {
+    if (!loggedIn || loadingOrganizations) return false;
     setState(() => loadingOrganizations = true);
     try {
       final rows = await api.listOrganizations();
@@ -160,12 +161,14 @@ class _HomePageState extends State<HomePage> {
         await _storage.delete(key: 'organization_id');
         await _storage.delete(key: 'vehicle_id');
         if (mounted) setState(() => message = tr('لا توجد مؤسسة مرتبطة بالحساب؛ أنشئ مؤسسة جديدة.', 'No organization is linked to this account. Create one.'));
-        return;
+        return true;
       }
       await _storage.write(key: 'organization_id', value: preferred);
       await _loadOrganizationVehicles(preferred, preferSaved: true);
+      return true;
     } catch (e) {
       _showError(e);
+      return false;
     } finally {
       if (mounted) setState(() => loadingOrganizations = false);
     }

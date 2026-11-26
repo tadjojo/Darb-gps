@@ -380,7 +380,23 @@ export default {
         return json(data, 201, headers);
       }
 
-            const vehicleListMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/vehicles$"));
+            const orgLatestLocationsMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/locations/latest$"));
+      if (orgLatestLocationsMatch && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const organizationId = decodeURIComponent(orgLatestLocationsMatch[1]);
+        const { response, data } = await supabaseRpc(
+          env,
+          "darb_api_latest_locations_for_organization",
+          { p_organization_id: organizationId },
+          authorization,
+        );
+        if (!response.ok) return json({ message: "Latest organization locations request failed" }, rpcErrorStatus(response, data), headers);
+        return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
+      }
+
+      const vehicleListMatch = url.pathname.match(new RegExp("^/api/v1/organizations/([^/]+)/vehicles$"));
       if (vehicleListMatch && request.method === "GET") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

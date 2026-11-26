@@ -368,8 +368,12 @@ async function pollLatestLocations() {
   }
 }
 function connectDarbRealtime() {
-  if (!window.io || !apiBase || !token) {
-    console.warn('DARB: Realtime unavailable; using REST location polling');
+  const isFreeWorkerApi = (() => {
+    try { return new URL(apiBase).hostname.startsWith('darb-gps-free-api'); }
+    catch { return false; }
+  })();
+  if (isFreeWorkerApi || !window.io || !apiBase || !token) {
+    console.info('DARB: Socket.IO unavailable on the selected API; using REST location polling');
     startLiveLocationPolling();
     return;
   }

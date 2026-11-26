@@ -64,3 +64,9 @@ All four PR workflows completed successfully:
 ## Dashboard help and staging CORS
 - Added a standalone `dashboard-help.html` setup guide to the staging branch only; the Pages bundle now includes it, and the sidebar links to it instead of the repository README.
 - Wrangler CORS allow-list now includes the Pages preview origin `https://staging.darb-gps-web-staging.pages.dev` for staging web-to-API testing.
+
+## Fleet batch-location pagination and response minimization
+- Worker endpoint now validates `limit` (1–500, default 250) and `offset` (0–1,000,000), returning `data` and `nextOffset`.
+- Supabase RPC now pages vehicles deterministically and emits only latitude/longitude/speed/heading/recorded timestamp for latest locations, avoiding exposure of arbitrary location table columns and unbounded response payloads.
+- Static dashboard startup and 60-second polling iterate bounded pages. Legacy array response compatibility is retained in its helper.
+- Worker route tests cover pagination forwarding/response, bearer-auth requirement, and invalid limits.

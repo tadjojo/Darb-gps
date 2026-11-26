@@ -72,7 +72,31 @@
     if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);
     return data;
   }
-  async function loadVehicles(){if(!token||!orgId)return;const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);const list=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.items||data.vehicles||[]));const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));vehicles=await Promise.all(base.map(async v=>{try{const loc=await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`);if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))return v;const age=Math.max(0,Date.now()-new Date(loc.recorded_at||loc.recordedAt).getTime());const mins=Math.floor(age/60000);const speed=Number(loc.speed_kmh??loc.speedKmh??0);return {...v,lat:Number(loc.latitude),lng:Number(loc.longitude),speed,heading:Number(loc.heading||0),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};}catch{return v;}}));renderVehicles();updateStats();drawMarkers();}
+  function applyLatestLocation(vehicle, location){
+    if(!location||!Number.isFinite(Number(location.latitude))||!Number.isFinite(Number(location.longitude)))return vehicle;
+    const time=Date.parse(location.recorded_at||location.recordedAt||'');
+    const age=Number.isFinite(time)?Math.max(0,Date.now()-time):Infinity;
+    const mins=Math.floor(age/60000),speed=Number(location.speed_kmh??location.speedKmh??0);
+    return {...vehicle,lat:Number(location.latitude),lng:Number(location.longitude),speed,heading:Number(location.heading||0),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};
+  }
+  async function loadVehicles(){
+    if(!token||!orgId)return;
+    const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);
+    const list=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.items||data.vehicles||[]));
+    const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));
+    let batchRows=null;
+    try{
+      const batch=await api(`/organizations/${encodeURIComponent(orgId)}/locations/latest`);
+      batchRows=Array.isArray(batch)?batch:(Array.isArray(batch?.data)?batch.data:[]);
+    }catch(error){batchRows=null;}
+    if(batchRows!==null){
+      const byVehicle=new Map(batchRows.map(row=>[String(row.vehicle_id),row.location]));
+      vehicles=base.map(v=>applyLatestLocation(v,byVehicle.get(String(v.id))));
+    }else{
+      vehicles=await Promise.all(base.map(async v=>{try{return applyLatestLocation(v,await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`));}catch{return v;}}));
+    }
+    renderVehicles();updateStats();drawMarkers();
+  }
   function openModal(id){$(id).classList.add('open');$(id).setAttribute('aria-hidden','false');}function closeModal(id){$(id).classList.remove('open');$(id).setAttribute('aria-hidden','true');}
   async function login(e){e.preventDefault();$('loginMessage').textContent='جارٍ تسجيل الدخول…';try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({identifier:$('identifier').value.trim(),password:$('password').value})});token=data.accessToken;refreshToken=data.refreshToken;sessionStorage.setItem('darb_access',token);sessionStorage.setItem('darb_refresh',refreshToken);setConnection(true);closeModal('loginModal');if (!orgId) { vehicles=[];renderVehicles();updateStats();drawMarkers();$('settingsMessage').textContent='أنشئ مؤسسة من صفحة الإعدادات لبدء إضافة المركبات.'; } if (orgId) {
   await loadVehicles();
@@ -339,24 +363,34 @@ async function pollLatestLocations() {
   if (!tracked.length) return;
   liveLocationPollBusy = true;
   try {
-    const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
     let changed = false;
-    results.forEach((result, index) => {
-      if (result.status !== 'fulfilled') return;
-      const loc = result.value;
-      if (!loc || !Number.isFinite(Number(loc.latitude)) || !Number.isFinite(Number(loc.longitude))) return;
-      const v = tracked[index];
-      const age = Math.max(0, Date.now() - new Date(loc.recorded_at || loc.recordedAt).getTime());
-      const speed = Number(loc.speed_kmh ?? loc.speedKmh ?? 0);
-      const mins = Math.floor(age / 60000);
-      v.lat = Number(loc.latitude);
-      v.lng = Number(loc.longitude);
-      v.speed = speed;
-      v.heading = Number(loc.heading || 0);
-      v.status = age > 10 * 60000 ? 'offline' : speed <= 3 ? 'stopped' : 'moving';
-      v.updated = mins < 1 ? 'الآن' : `منذ ${mins} دقيقة`;
-      changed = true;
-    });
+    const isFreeWorkerApi = (() => { try { return new URL(apiBase).hostname.startsWith('darb-gps-free-api'); } catch { return false; } })();
+    if (isFreeWorkerApi && orgId) {
+      try {
+        const batch = await api(`/organizations/${encodeURIComponent(orgId)}/locations/latest`);
+        const rows = Array.isArray(batch) ? batch : (Array.isArray(batch?.data) ? batch.data : []);
+        const byVehicle = new Map(rows.map(row => [String(row.vehicle_id), row.location]));
+        tracked.forEach(v => {
+          const next = applyLatestLocation(v, byVehicle.get(String(v.id)));
+          if (next !== v) { Object.assign(v, next); changed = true; }
+        });
+      } catch (batchError) {
+        console.warn('DARB: batch location polling unavailable; falling back to per-vehicle requests', batchError.message);
+        const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
+        results.forEach((result,index) => {
+          if(result.status!=='fulfilled')return;
+          const next=applyLatestLocation(tracked[index],result.value);
+          if(next!==tracked[index]){Object.assign(tracked[index],next);changed=true;}
+        });
+      }
+    } else {
+      const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
+      results.forEach((result,index) => {
+        if(result.status!=='fulfilled')return;
+        const next=applyLatestLocation(tracked[index],result.value);
+        if(next!==tracked[index]){Object.assign(tracked[index],next);changed=true;}
+      });
+    }
     if (changed) {
       renderVehicles();
       updateStats();

@@ -27,12 +27,13 @@ jobs:
       - name: Prepare static site bundle
         run: |
           mkdir -p dist-web
-          cp index.html app.js styles.css dist-web/
+          cp index.html app.js styles.css dashboard-help.html dist-web/
       - name: Verify site assets
         run: |
           test -s dist-web/index.html
           test -s dist-web/app.js
           test -s dist-web/styles.css
+          test -s dist-web/dashboard-help.html
       - name: Check Cloudflare secrets
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN secret" && exit 1)

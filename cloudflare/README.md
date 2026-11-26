@@ -19,6 +19,10 @@ Cloudflare Workers Free includes a daily request limit (currently 100,000/day), 
 - [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Rate Limiting bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 
+
+## Free-plan request budget (important)
+Workers Free currently has a 100,000-request/day account limit. GPS ingestion requests count toward this quota: at a 5-second interval, one active tracker generates about 17,280 requests/day; five active trackers use about 86,400/day before auth, dashboard, alerts, history or other requests; six active trackers at 5 seconds exceed the daily limit. The free Worker is therefore a low-volume prototype/limited deployment, not unlimited fleet hosting. Monitor usage and choose a slower interval, batching/duty cycling where acceptable, or a paid/alternate gateway when the fleet grows. Official limits: https://developers.cloudflare.com/workers/platform/limits/
+
 ## API prototype capabilities
 The Worker implements Supabase Auth proxy, organizations/vehicles/members, mobile GPS, hardware GPS credential lifecycle and HTTPS adapters, history/trips/stops, alerts/rules, security headers, body-size limits and rate-limit bindings. The migration matrix lists supported and remaining endpoints.
 

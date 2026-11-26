@@ -64,3 +64,29 @@ test("rate limiter binding failure is fail-closed", async () => {
   }), env);
   assert.equal(response.status, 429);
 });
+
+test("rate-limited login proceeds when the configured binding allows it", async () => {
+  const calls = [];
+  const env = {
+    ALLOWED_ORIGINS: "https://app.example",
+    AUTH_RATE_LIMIT: { async limit(args) { calls.push(args); return { success: true }; } },
+    SUPABASE_URL: "https://supabase.example",
+    SUPABASE_PUBLISHABLE_KEY: "public-key",
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    access_token: "access-token", refresh_token: "refresh-token",
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+  try {
+    const response = await worker.fetch(new Request("https://worker.test/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.10" },
+      body: JSON.stringify({ identifier: "user@example.com", password: "secret" }),
+    }), env);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { accessToken: "access-token", refreshToken: "refresh-token" });
+    assert.deepEqual(calls, [{ key: "login:203.0.113.10" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

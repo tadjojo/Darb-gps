@@ -59,6 +59,14 @@ Alert APIs are implemented for listing, acknowledging, resolving, listing rules,
 - Admin console/backend routes and audit logging.
 - Cross-platform Flutter tests, API integration tests, staging deployment, rollback plan, and security review.
 
+## Worker security baseline (implemented)
+
+- Strict CORS allowlist and browser-origin handling.
+- Restrictive CSP, no-referrer, nosniff, anti-frame, and no-store response headers.
+- Request payload cap of 64 KiB enforced from declared length and streamed body bytes; oversized requests return HTTP 413.
+- Tests cover security headers and oversized request handling.
+- Hardware credentials are not returned after enrollment and private hashes are not exposed.
+
 ## Migration safety gate
 
 Do not change the Flutter default API base URL or replace production until every endpoint the released app uses is migrated and validated against the actual Supabase project/schema. Use a staging Worker and preserve the existing production API for rollback.

@@ -24,14 +24,17 @@ jobs:
           test -s index.html
           test -s app.js
           test -s styles.css
+          test -s dashboard-help.html
           grep -q 'styles.css' index.html
           grep -q 'app.js' index.html
+          grep -q 'dashboard-help.html' index.html
       - name: JavaScript syntax check
         run: node --check app.js
       - name: Prepare and verify Pages bundle
         run: |
           mkdir -p dist-web
-          cp index.html app.js styles.css dist-web/
+          cp index.html app.js styles.css dashboard-help.html dist-web/
           test -s dist-web/index.html
           test -s dist-web/app.js
           test -s dist-web/styles.css
+          test -s dist-web/dashboard-help.html

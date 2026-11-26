@@ -105,7 +105,7 @@ function parseGt06LocationFrame(frameHex) {
   const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));
   if(month<1||month>12||day<1||day>31||hour>23||minute>59||second>59||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)throw new Error("Invalid GT06 device time");
   const satellites=payload[6]&0x0f,latRaw=(payload[7]*0x1000000)+(payload[8]<<16)+(payload[9]<<8)+payload[10],lonRaw=(payload[11]*0x1000000)+(payload[12]<<16)+(payload[13]<<8)+payload[14],speed=payload[15],course=(payload[16]<<8)|payload[17],flags=payload[16];
-  const latitude=latRaw/1800000*((flags&4)?1:-1),longitude=lonRaw/1800000*((flags&8)?1:-1),heading=course&0x03ff;
+  const latitude=latRaw/1800000*((flags&4)?1:-1),longitude=lonRaw/1800000*((flags&8)?-1:1),heading=course&0x03ff;
   if(latRaw>90*1800000||lonRaw>180*1800000||heading>360)throw new Error("GT06 location out of range");
   if(!(flags&0x10))throw new Error("GT06 location has no GPS fix");
   return {year,month,day,hour,minute,second,satellites,latitude,longitude,speedKmh:speed,heading};

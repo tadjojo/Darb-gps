@@ -1,7 +1,7 @@
 # DARB GPS — Cloudflare Free staging architecture
 
 ## Current migration target (free plan prototype)
-- **Dashboard:** static HTML/CSS/JS; a manually gated GitHub Actions workflow can deploy a separate staging preview to Cloudflare Pages project `darb-gps-web-staging`. The web client now supports the Worker’s wrapped list responses and falls back to 60-second REST latest-location polling because Socket.IO is not implemented in the free Worker.
+- **Dashboard:** static HTML/CSS/JS; a manually gated GitHub Actions workflow can deploy a separate staging preview to Cloudflare Pages project `darb-gps-web-staging`. The web client now supports the Worker’s wrapped list responses, uses a batch latest-location endpoint (one request for the fleet) and falls back to 60-second REST polling because Socket.IO is not implemented in the free Worker.
 - **API:** `cloudflare/api-worker` Cloudflare Worker, intended as `darb-gps-free-api` on workers.dev. Manual GitHub Actions deployment workflow validates tests and Wrangler dry-run first.
 - **Database/Auth:** Supabase. SQL migrations/RPCs are staged in the migration PR and must be applied to a separate staging Supabase project before end-to-end validation.
 - **Production safety:** The existing API endpoint remains the app default. No Cloudflare staging deploy or production migration has been performed; keep the PR draft and don't switch API defaults until acceptance.

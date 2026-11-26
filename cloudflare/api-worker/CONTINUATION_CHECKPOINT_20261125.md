@@ -60,3 +60,7 @@ All four PR workflows completed successfully:
 - Added `GET /api/v1/organizations/:organizationId/locations/latest` and staged SQL RPC `darb_api_latest_locations_for_organization`. Active organization membership authorizes the snapshot; individual location rows are returned only for active vehicle-member access, matching the single-vehicle latest-location RPC.
 - The static dashboard now requests a single batch snapshot at startup and on each 60-second polling cycle, instead of N latest-location calls. If the batch endpoint/RPC is not yet available, it gracefully falls back to per-vehicle requests for compatibility.
 - Added route tests for authenticated batch response envelope and missing-bearer rejection. Worker suite is now 60 tests; current CI is pending.
+
+## Dashboard help and staging CORS
+- Added a standalone `dashboard-help.html` setup guide to the staging branch only; the Pages bundle now includes it, and the sidebar links to it instead of the repository README.
+- Wrangler CORS allow-list now includes the Pages preview origin `https://staging.darb-gps-web-staging.pages.dev` for staging web-to-API testing.

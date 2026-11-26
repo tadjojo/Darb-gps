@@ -55,3 +55,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke-test Pages staging preview
+        run: |
+          preview_url="https://staging.darb-gps-web-staging.pages.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$preview_url/" -o /tmp/darb-preview.html
+          grep -q "دَرْب GPS" /tmp/darb-preview.html
+          echo "Static dashboard preview is responding: $preview_url"

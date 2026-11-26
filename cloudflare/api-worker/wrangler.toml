@@ -4,7 +4,7 @@ compatibility_date = "2026-11-25"
 workers_dev = true
 
 [vars]
-ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web-2026.tadjojo.workers.dev"
+ALLOWED_ORIGINS = "https://tadjojo.github.io,https://darb-gps-web-2026.tadjojo.workers.dev,https://staging.darb-gps-web-staging.pages.dev"
 
 [observability]
 enabled = true

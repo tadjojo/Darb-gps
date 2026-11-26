@@ -64,7 +64,8 @@ Alert APIs are implemented for listing, acknowledging, resolving, listing rules,
 - Strict CORS allowlist and browser-origin handling.
 - Restrictive CSP, no-referrer, nosniff, anti-frame, and no-store response headers.
 - Request payload cap of 64 KiB enforced from declared length and streamed body bytes; oversized requests return HTTP 413.
-- Tests cover security headers and oversized request handling.
+- Tests cover security headers, oversized requests, and rate-limiter rejection/fail-closed behavior.
+- Auth login/refresh: 20 requests/min per IP; tracker ingest/heartbeat: 120 requests/min per credential hash. Cloudflare limits are approximate per location; production tuning is required.
 - Hardware credentials are not returned after enrollment and private hashes are not exposed.
 
 ## Migration safety gate

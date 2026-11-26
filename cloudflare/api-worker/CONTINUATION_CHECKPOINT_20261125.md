@@ -55,3 +55,8 @@ All four PR workflows completed successfully:
 ## Web dashboard compatibility work
 - Static dashboard now accepts the Worker vehicle-list envelope `{data:[...]}`, unwraps trip/stop/device envelopes, and uses REST latest-location polling (60-second cadence) for the free Worker instead of repeatedly attempting Socket.IO. This cadence is intended to keep Free-plan request usage bounded; tune it in staging based on fleet size and usage.
 - JavaScript syntax and Pages asset-bundle validation are now part of the static dashboard CI workflow.
+
+## Fleet batch latest-location API
+- Added `GET /api/v1/organizations/:organizationId/locations/latest` and staged SQL RPC `darb_api_latest_locations_for_organization`. Active organization membership authorizes the snapshot; individual location rows are returned only for active vehicle-member access, matching the single-vehicle latest-location RPC.
+- The static dashboard now requests a single batch snapshot at startup and on each 60-second polling cycle, instead of N latest-location calls. If the batch endpoint/RPC is not yet available, it gracefully falls back to per-vehicle requests for compatibility.
+- Added route tests for authenticated batch response envelope and missing-bearer rejection. Worker suite is now 60 tests; current CI is pending.

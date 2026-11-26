@@ -1,61 +1,36 @@
-# DARB GPS on Cloudflare
+# DARB GPS — Cloudflare Free staging architecture
 
-## Target deployment
+## Current migration target (free plan prototype)
+- **Dashboard:** static HTML/CSS/JS; a manually gated GitHub Actions workflow can deploy a separate staging preview to Cloudflare Pages project `darb-gps-web-staging`.
+- **API:** `cloudflare/api-worker` Cloudflare Worker, intended as `darb-gps-free-api` on workers.dev. Manual GitHub Actions deployment workflow validates tests and Wrangler dry-run first.
+- **Database/Auth:** Supabase. SQL migrations/RPCs are staged in the migration PR and must be applied to a separate staging Supabase project before end-to-end validation.
+- **Production safety:** The existing API endpoint remains the app default. No Cloudflare staging deploy or production migration has been performed; keep the PR draft and don't switch API defaults until acceptance.
 
-- Dashboard: Cloudflare Worker `darb-gps-web-2026` at https://darb-gps-web-2026.tadjojo.workers.dev/
-- HTTP API: Cloudflare Worker + Cloudflare Container `darb-gps-new` at https://darb-gps-new.tadjojo.workers.dev/
-- PostgreSQL and authentication: Supabase.
-- API runtime: the existing NestJS application and `api/Dockerfile`, built and run as a Cloudflare Container. No Render API proxy is used.
-- Device gateway: raw GT06/NMEA TCP is a separate deployment concern. Cloudflare Spectrum Worker-origin TCP requires a custom zone and an eligible paid plan; workers.dev alone is not a public raw-TCP listener.
+## Staging deployment workflows
+- API Worker: `.github/workflows/cloudflare-api-worker-staging.yml`
+- Static dashboard Pages: `.github/workflows/cloudflare-static-dashboard-staging.yml`
+- Staging checklist: `cloudflare/api-worker/DEPLOY_STAGING_CHECKLIST.md`
+- Static dashboard instructions: `cloudflare/STATIC_DASHBOARD_STAGING.md`
 
-## Cost requirement
+Both workflows are manual, require the explicit confirmation input, and use a separate staging target. Configure GitHub Actions secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; use least-privilege Cloudflare tokens. Never commit or paste secrets. The token should include Workers Scripts Edit + Account Settings Read for API Worker deploy, and Pages Edit + Account Settings Read for Pages deployment if using one shared token.
 
-Cloudflare Containers are not included in the Free plan. Running the NestJS API container requires the Workers Paid plan (minimum USD $5/month) plus any usage above the included allowances. The dashboard-only static Worker can remain on the Free plan. Do not enable the API Container if a paid plan is not acceptable.
+## Worker Free limits and monitoring
+Cloudflare Workers Free includes a daily request limit (currently 100,000/day), CPU time limit (10 ms/request), and 128 MB memory. Rate limiting bindings are approximate per Cloudflare location; auth and tracker throttles need real staging traffic validation and tuning. See:
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Rate Limiting bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 
-## Cloudflare Workers Builds settings for darb-gps-new
+## API prototype capabilities
+The Worker implements Supabase Auth proxy, organizations/vehicles/members, mobile GPS, hardware GPS credential lifecycle and HTTPS adapters, history/trips/stops, alerts/rules, security headers, body-size limits and rate-limit bindings. The migration matrix lists supported and remaining endpoints.
 
-Open Workers & Pages:
-https://dash.cloudflare.com/2e1e8539dff6ddbc2308ef63cbefd3ad/workers-and-pages
+## Not available in this free Worker API yet
+- Raw tracker TCP ingress (GT06/NMEA): HTTPS adapters only; raw TCP needs a separate gateway/eligible service.
+- Socket.IO realtime fanout, admin console, push notifications, and complete release integration.
+- Staging database migration and end-to-end deployment verification.
 
-Connect `tadjojo/Darb-gps`, branch `main`, and set:
-
-1. Root directory: repository root (leave blank or use `/`). The Docker build context is `api/`, so do not set the root directory to `api` or `cloudflare/api-worker`.
-2. Build command: `npm install --prefix cloudflare/api-worker`
-3. Deploy command: `npx wrangler deploy --config cloudflare/api-worker/wrangler.toml`
-4. Build output directory: leave blank.
-5. Confirm Worker name `darb-gps-new`.
-
-The Wrangler configuration builds `api/Dockerfile` with `api/` as its Docker build context, then routes API requests to the container on port 3000. This is a Cloudflare Containers deployment, not a static Pages build.
-
-## Required Cloudflare secrets
-
-Before the API can pass readiness checks, add these Worker secrets in the `darb-gps-new` settings:
-
-- `DATABASE_URL`: Supabase PostgreSQL connection string (use the direct or pooler endpoint supported by your Supabase project).
-- `DATABASE_CA_CERT`: full PEM text of the Supabase CA certificate used by the database endpoint.
-- `SUPABASE_URL`: Supabase project URL.
-- `SUPABASE_PUBLISHABLE_KEY`: Supabase publishable/anon key.
-
-Do not place secrets in Git or send them in chat. Optional non-secret variables are already defaulted by the Worker: `DB_POOL_MAX`, `DB_IDLE_TIMEOUT_MS`, and `DB_CONNECTION_TIMEOUT_MS`.
-
-## Verification
-
-After the first successful Cloudflare build and container rollout, open:
-
-- https://darb-gps-new.tadjojo.workers.dev/api/v1/health/live
-- https://darb-gps-new.tadjojo.workers.dev/api/v1/health/ready
-
-The first request can return HTTP 503 while the container starts. Retry after a short wait. The ready endpoint must report the database as connected before testing login, organizations, vehicles, tracking, alerts, and realtime Socket.IO.
-
-The web dashboard already defaults to:
-`https://darb-gps-new.tadjojo.workers.dev/api/v1`
-
-## GPS tracker TCP gateway
-
-The GT06/NMEA gateway is not an HTTP Worker. Cloudflare's inbound TCP-to-Worker feature is currently a public beta and requires a Cloudflare Spectrum application on an eligible custom domain/zone and plan. The standard `*.workers.dev` hostname is not enough to expose arbitrary tracker TCP ports. Do not point trackers at the HTTP API URL.
+## Legacy Cloudflare Container setup (not the free migration target)
+The existing `darb-gps-new` service is the legacy NestJS API/container path. Cloudflare Containers are not included in the Workers Free plan and require Workers Paid. Existing Git-connected build failures are not evidence of a successful deployment; inspect account-protected build logs before deciding whether to repair or retire that service. Do not use the paid Container workflow as the free staging target.
 
 ## Security
-
-- Never commit Cloudflare API tokens, Supabase service-role keys, database passwords, CA private keys, or tracker bearer tokens.
-- Configure credentials as Cloudflare Worker secrets.
-- Keep the old service available only until Cloudflare health, authentication, database, realtime, and device ingestion tests pass; then retire it deliberately.
+- Keep service-role and database credentials in Cloudflare secret settings only.
+- Keep tracker credentials hashed server-side and never expose them to browser/mobile client logs.
+- Maintain the existing production API until staging integration, security review, mobile testing and rollback checks are complete.

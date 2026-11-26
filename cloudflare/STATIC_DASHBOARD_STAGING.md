@@ -4,7 +4,7 @@ This workflow deploys only the static demo dashboard to a separate Cloudflare Pa
 
 ## Workflow
 `.github/workflows/cloudflare-static-dashboard-staging.yml`
-1. Prepare only `index.html`, `app.js`, and `styles.css` in a clean `dist-web` directory.
+1. Prepare only `index.html`, `app.js`, `styles.css`, and `dashboard-help.html` in a clean `dist-web` directory.
 2. Check the required files.
 3. Deploy to a separate Pages staging project via Wrangler Pages.
 

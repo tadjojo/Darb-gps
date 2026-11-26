@@ -73,6 +73,10 @@ npx wrangler deploy
 
 Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `ALLOWED_ORIGINS` through the Cloudflare dashboard or Wrangler. Do not deploy this prototype as a replacement until the migration gate is met.
 
+## Free-plan request budget
+
+Workers Free currently limits the account to 100,000 requests/day. GPS ingestion at 5-second updates is approximately 17,280 requests/day per active device, so 5 devices consume about 86,400 requests/day before other API traffic and 6 exceed the quota. Monitor usage; tune update frequency or move to a paid/alternate gateway if fleet volume grows. See [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
+
 ## Request and security limits
 
 - HTTP request bodies are capped at 64 KiB; requests are rejected with HTTP 413 when declared or streamed payloads exceed the limit.

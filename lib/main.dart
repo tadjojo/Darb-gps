@@ -222,6 +222,7 @@ class _HomePageState extends State<HomePage> {
       await _storage.write(key: 'organization_id', value: orgId);
       await _storage.write(key: 'vehicle_id', value: vId);
       if (mounted) setState(() { organizationId = orgId; vehicleId = vId; deviceId = null; message = tr('تم إنشاء المؤسسة والمركبة', 'Organization and vehicle created'); });
+      await _loadOrganizations();
       await _enrollDevice();
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => busy = false); }

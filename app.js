@@ -112,7 +112,8 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
     rows.innerHTML='<tr><td colspan="7">جارٍ تحميل الأجهزة…</td></tr>';
     try{
       const data=await api('/tracking/devices/vehicle/'+encodeURIComponent(vehicleId));
-      const devices=(Array.isArray(data)?data:[]).filter(d=>d.device_type==='gps_tracker');
+      const deviceList=Array.isArray(data)?data:(Array.isArray(data?.data)?data.data:[]);
+      const devices=deviceList.filter(d=>d.device_type==='gps_tracker');
       if(!devices.length){rows.innerHTML='<tr><td colspan="7">لا توجد أجهزة GPS مستقلة مرتبطة بهذه المركبة.</td></tr>';return;}
       const labels={json:'JSON / HTTP',gt06:'GT06',nmea:'NMEA'};
       rows.innerHTML=devices.map(d=>'<tr><td>'+escapeHtml(d.label||'جهاز GPS')+'</td><td>'+escapeHtml(labels[d.protocol]||d.protocol||'—')+'</td><td>'+escapeHtml(d.imei||'—')+'</td><td>'+escapeHtml(d.model||'—')+'</td><td>'+escapeHtml(d.status==='active'?'نشط':'ملغي')+'</td><td>'+escapeHtml(d.last_seen_at?formatDateTime(d.last_seen_at):'لم يتصل بعد')+'</td><td>'+(d.status==='active'?'<button type="button" class="outline-btn" data-rotate-device="'+escapeHtml(d.id)+'">تدوير الرمز</button> <button type="button" class="outline-btn" data-revoke-device="'+escapeHtml(d.id)+'">إلغاء الجهاز</button>':'—')+'</td></tr>').join('');
@@ -202,10 +203,12 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
     $('tripRows').innerHTML='<tr><td colspan="5">جارٍ التحميل…</td></tr>';
     $('stopRows').innerHTML='<tr><td colspan="4">جارٍ التحميل…</td></tr>';
     try{
-      const [trips,stops]=await Promise.all([
+      const [tripsResponse,stopsResponse]=await Promise.all([
         api(`/tracking/vehicles/${encodeURIComponent(vehicleId)}/trips?${query}&limit=100`),
         api(`/tracking/vehicles/${encodeURIComponent(vehicleId)}/stops?${query}&limit=500`)
       ]);
+      const trips=Array.isArray(tripsResponse)?tripsResponse:(Array.isArray(tripsResponse?.data)?tripsResponse.data:[]);
+      const stops=Array.isArray(stopsResponse)?stopsResponse:(Array.isArray(stopsResponse?.data)?stopsResponse.data:[]);
       $('tripRows').innerHTML=trips.length?trips.map(trip=>`<tr><td>${escapeHtml(formatDateTime(trip.start_at))}</td><td>${escapeHtml(formatDateTime(trip.end_at))}</td><td>${escapeHtml(formatDistance(trip.distance_meters))}</td><td>${Number(trip.points_count)||0}</td><td><button class="outline-btn trip-route-btn" type="button" data-from="${escapeHtml(trip.start_at)}" data-to="${escapeHtml(trip.end_at)}">عرض المسار</button></td></tr>`).join(''):'<tr><td colspan="5">لا توجد رحلات مسجلة خلال الفترة المحددة.</td></tr>';
       $('stopRows').innerHTML=stops.length?stops.map(stop=>`<tr><td>${escapeHtml(formatDateTime(stop.start_at))}</td><td>${escapeHtml(formatDuration(stop.duration_seconds))}</td><td>${Number(stop.points_count)||0}</td><td dir="ltr">${Number(stop.latitude).toFixed(5)}, ${Number(stop.longitude).toFixed(5)}</td></tr>`).join(''):'<tr><td colspan="4">لا توجد توقفات طويلة خلال الفترة المحددة.</td></tr>';
       message.textContent=`تم تحميل ${trips.length} رحلة و${stops.length} توقف.`;

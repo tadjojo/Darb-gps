@@ -655,14 +655,14 @@ class _HomePageState extends State<HomePage> {
       const Divider(height: 28),
       Text(tr('اختيار المؤسسة والمركبة', 'Select organization & vehicle'), style: const TextStyle(fontWeight: FontWeight.bold)),
       DropdownButtonFormField<String>(
-        value: organizationId,
+        value: organizationOptions.any((o) => o['id']?.toString() == organizationId) ? organizationId : null,
         isExpanded: true,
         decoration: InputDecoration(labelText: tr('المؤسسة', 'Organization')),
         items: organizationOptions.map((o) => DropdownMenuItem<String>(value: o['id']?.toString(), child: Text(o['name']?.toString() ?? tr('مؤسسة', 'Organization')))).toList(),
         onChanged: busy ? null : _selectOrganization,
       ),
       DropdownButtonFormField<String>(
-        value: vehicleId,
+        value: vehicleOptions.any((v) => v['id']?.toString() == vehicleId) ? vehicleId : null,
         isExpanded: true,
         decoration: InputDecoration(labelText: tr('المركبة', 'Vehicle')),
         items: vehicleOptions.map((v) => DropdownMenuItem<String>(value: v['id']?.toString(), child: Text(v['display_name']?.toString() ?? v['displayName']?.toString() ?? tr('مركبة', 'Vehicle')))).toList(),

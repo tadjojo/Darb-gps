@@ -8,7 +8,7 @@
     {id:'demo-4',name:'شاحنة الأسطول 08',plate:'45-11762',driver:'سامي يوسف',status:'offline',updated:'منذ ساعتين',lat:32.015,lng:35.728},
     {id:'demo-5',name:'مركبة المتابعة 06',plate:'12-66310',driver:'ليث محمود',status:'moving',updated:'منذ 5 دقائق',lat:31.71,lng:35.793}
   ];
-  let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, routeMarkers = [], alertCount = 0, alertKnownIds = new Set(), alertBaselineReady = false, alertPollBusy = false, alertPollTimer = null, token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
+  let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, routeMarkers = [], alertCount = 0, alertKnownIds = new Set(), alertBaselineReady = false, alertPollBusy = false, alertPollTimer = null, token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;\n  let liveLocationPollTimer = null, liveLocationPollBusy = false;
   let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-new.tadjojo.workers.dev/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
   const statusText = {moving:'تتحرك',stopped:'متوقفة',offline:'غير متصلة'};
   const vehicleRow = v => `<tr><td><div class="vehicle-cell"><span class="vehicle-icon">▰</span>${escapeHtml(v.name)}</div></td><td dir="ltr">${escapeHtml(v.plate || '—')}</td><td>${escapeHtml(v.driver || '—')}</td><td><span class="status ${v.status}">${statusText[v.status] || 'غير معروف'}</span></td><td>${escapeHtml(v.updated || '—')}</td>${v.id?.startsWith('demo-')?'':'<td></td>'}</tr>`;
@@ -71,14 +71,14 @@
     if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);
     return data;
   }
-  async function loadVehicles(){if(!token||!orgId)return;const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);const list=Array.isArray(data)?data:(data.items||data.vehicles||[]);const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));vehicles=await Promise.all(base.map(async v=>{try{const loc=await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`);if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))return v;const age=Math.max(0,Date.now()-new Date(loc.recorded_at||loc.recordedAt).getTime());const mins=Math.floor(age/60000);const speed=Number(loc.speed_kmh??loc.speedKmh??0);return {...v,lat:Number(loc.latitude),lng:Number(loc.longitude),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};}catch{return v;}}));renderVehicles();updateStats();drawMarkers();}
+  async function loadVehicles(){if(!token||!orgId)return;const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);const list=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.items||data.vehicles||[]));const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));vehicles=await Promise.all(base.map(async v=>{try{const loc=await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`);if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))return v;const age=Math.max(0,Date.now()-new Date(loc.recorded_at||loc.recordedAt).getTime());const mins=Math.floor(age/60000);const speed=Number(loc.speed_kmh??loc.speedKmh??0);return {...v,lat:Number(loc.latitude),lng:Number(loc.longitude),speed,heading:Number(loc.heading||0),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};}catch{return v;}}));renderVehicles();updateStats();drawMarkers();}
   function openModal(id){$(id).classList.add('open');$(id).setAttribute('aria-hidden','false');}function closeModal(id){$(id).classList.remove('open');$(id).setAttribute('aria-hidden','true');}
   async function login(e){e.preventDefault();$('loginMessage').textContent='جارٍ تسجيل الدخول…';try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({identifier:$('identifier').value.trim(),password:$('password').value})});token=data.accessToken;refreshToken=data.refreshToken;sessionStorage.setItem('darb_access',token);sessionStorage.setItem('darb_refresh',refreshToken);setConnection(true);closeModal('loginModal');if (!orgId) { vehicles=[];renderVehicles();updateStats();drawMarkers();$('settingsMessage').textContent='أنشئ مؤسسة من صفحة الإعدادات لبدء إضافة المركبات.'; } if (orgId) {
   await loadVehicles();
   connectDarbRealtime();
 }
 startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textContent=err.message;}}
-  async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if(alertPollTimer){clearInterval(alertPollTimer);alertPollTimer=null;}alertKnownIds.clear();alertBaselineReady=false;if (darbSocket) {
+  async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if(alertPollTimer){clearInterval(alertPollTimer);alertPollTimer=null;}stopLiveLocationPolling();alertKnownIds.clear();alertBaselineReady=false;if (darbSocket) {
   darbSocket.disconnect();
   darbSocket = null;
 }token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
@@ -318,9 +318,56 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
   // DARB GPS - Realtime connection
 let darbSocket = null;
 
+function stopLiveLocationPolling() {
+  if (liveLocationPollTimer) {
+    clearInterval(liveLocationPollTimer);
+    liveLocationPollTimer = null;
+  }
+}
+function startLiveLocationPolling() {
+  if (!token || liveLocationPollTimer) return;
+  // REST fallback uses one request per tracked vehicle; 60s keeps Free-plan usage bounded.
+  liveLocationPollTimer = setInterval(pollLatestLocations, 60000);
+}
+async function pollLatestLocations() {
+  if (!token || liveLocationPollBusy) return;
+  const tracked = vehicles.filter(v => v.id && !String(v.id).startsWith('demo-'));
+  if (!tracked.length) return;
+  liveLocationPollBusy = true;
+  try {
+    const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
+    let changed = false;
+    results.forEach((result, index) => {
+      if (result.status !== 'fulfilled') return;
+      const loc = result.value;
+      if (!loc || !Number.isFinite(Number(loc.latitude)) || !Number.isFinite(Number(loc.longitude))) return;
+      const v = tracked[index];
+      const age = Math.max(0, Date.now() - new Date(loc.recorded_at || loc.recordedAt).getTime());
+      const speed = Number(loc.speed_kmh ?? loc.speedKmh ?? 0);
+      const mins = Math.floor(age / 60000);
+      v.lat = Number(loc.latitude);
+      v.lng = Number(loc.longitude);
+      v.speed = speed;
+      v.heading = Number(loc.heading || 0);
+      v.status = age > 10 * 60000 ? 'offline' : speed <= 3 ? 'stopped' : 'moving';
+      v.updated = mins < 1 ? 'الآن' : `منذ ${mins} دقيقة`;
+      changed = true;
+    });
+    if (changed) {
+      renderVehicles();
+      updateStats();
+      drawMarkers();
+    }
+  } catch (error) {
+    console.warn('DARB: REST location polling failed', error.message);
+  } finally {
+    liveLocationPollBusy = false;
+  }
+}
 function connectDarbRealtime() {
   if (!window.io || !apiBase || !token) {
-    console.warn('DARB: Realtime prerequisites missing');
+    console.warn('DARB: Realtime unavailable; using REST location polling');
+    startLiveLocationPolling();
     return;
   }
 
@@ -337,6 +384,7 @@ function connectDarbRealtime() {
 
   darbSocket.on('connect', () => {
     console.log('DARB: Live tracking connected');
+    stopLiveLocationPolling();
     vehicles
   .filter(v => v.id && !String(v.id).startsWith('demo-'))
   .forEach(v => {
@@ -374,6 +422,7 @@ function connectDarbRealtime() {
 
   darbSocket.on('disconnect', reason => {
     console.log('DARB: Live tracking disconnected', reason);
+    startLiveLocationPolling();
     if(reason==='io server disconnect'&&refreshToken&&!socketRefreshInProgress){
       socketRefreshInProgress=true;
       refreshAccessToken()
@@ -385,6 +434,7 @@ function connectDarbRealtime() {
 
   darbSocket.on('connect_error', error => {
     console.error('DARB realtime error:', error.message);
+    startLiveLocationPolling();
   });
 }
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pollAlertUpdates();});

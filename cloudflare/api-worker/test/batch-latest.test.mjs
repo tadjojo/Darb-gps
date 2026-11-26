@@ -58,3 +58,21 @@ test("organization latest-location batch endpoint validates organization UUID", 
   });
   assert.equal(response.status,400);
 });
+
+test("organization list endpoint returns only the RPC response data envelope", async () => {
+  const expected=[{id:"org-1",name:"Fleet",role:"org_admin"}];
+  const originalFetch=globalThis.fetch;let rpcUrl="";
+  globalThis.fetch=async url=>{rpcUrl=String(url);return new Response(JSON.stringify(expected),{status:200,headers:{"Content-Type":"application/json"}});};
+  try{
+    const response=await worker.fetch(new Request("https://worker.test/api/v1/organizations",{headers:{Authorization:"Bearer user-token"}}),{
+      ALLOWED_ORIGINS:"https://app.example",SUPABASE_URL:"https://supabase.example",SUPABASE_PUBLISHABLE_KEY:"public-key",
+    });
+    assert.equal(response.status,200);assert.deepEqual(await response.json(),{data:expected});
+    assert.match(rpcUrl,/darb_api_list_organizations$/);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test("organization list endpoint requires bearer auth", async () => {
+  const response=await worker.fetch(new Request("https://worker.test/api/v1/organizations"),{ALLOWED_ORIGINS:"https://app.example"});
+  assert.equal(response.status,401);
+});

@@ -17,28 +17,39 @@ test("organization latest-location batch endpoint returns paginated data and for
     return new Response(JSON.stringify({data:expected,nextOffset:250}), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   try {
-    const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/org-1/locations/latest?limit=250&offset=0", {
+    const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/123e4567-e89b-12d3-a456-426614174000/locations/latest?limit=250&offset=0", {
       method: "GET",
       headers: { Authorization: "Bearer user-token" },
     }), env);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { data: expected, nextOffset: 250 });
     assert.match(rpcUrl, /darb_api_latest_locations_for_organization$/);
-    assert.deepEqual(rpcBody,{p_organization_id:"org-1",p_limit:250,p_offset:0});
+    assert.deepEqual(rpcBody,{p_organization_id:"123e4567-e89b-12d3-a456-426614174000",p_limit:250,p_offset:0});
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
 test("organization latest-location batch endpoint requires bearer auth", async () => {
-  const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/org-1/locations/latest"), {
+  const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/123e4567-e89b-12d3-a456-426614174000/locations/latest"), {
     ALLOWED_ORIGINS: "https://app.example",
   });
   assert.equal(response.status, 401);
 });
 
 test("organization latest-location batch endpoint rejects invalid pagination", async () => {
-  const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/org-1/locations/latest?limit=501&offset=-1", {
+  const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/123e4567-e89b-12d3-a456-426614174000/locations/latest?limit=501&offset=-1", {
+    headers: {Authorization:"Bearer token"},
+  }), {
+    ALLOWED_ORIGINS: "https://app.example",
+    SUPABASE_URL: "https://supabase.example",
+    SUPABASE_PUBLISHABLE_KEY: "public-key",
+  });
+  assert.equal(response.status,400);
+});
+
+test("organization latest-location batch endpoint validates organization UUID", async () => {
+  const response = await worker.fetch(new Request("https://worker.test/api/v1/organizations/not-a-uuid/locations/latest", {
     headers: {Authorization:"Bearer token"},
   }), {
     ALLOWED_ORIGINS: "https://app.example",

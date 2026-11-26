@@ -78,6 +78,7 @@ Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `ALLOWED_ORIGINS` through th
 - Responses include restrictive content security and anti-framing headers.
 - Browser CORS is restricted to configured `ALLOWED_ORIGINS`; non-browser mobile clients are supported.
 - Do not use this Worker as the raw TCP endpoint for tracker devices; HTTP(S) adapters are supported while TCP ingress remains a separate gateway.
+- Cloudflare rate-limit bindings: authentication (20/min per IP, login/refresh) and tracker ingest (120/min per tracker credential). These limits are approximate per Cloudflare location; a binding failure is fail-closed (HTTP 429). The login IP limit can affect users sharing a carrier/NAT IP.
 
 ## Migration safety
 
@@ -86,4 +87,4 @@ Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `ALLOWED_ORIGINS` through th
 - Private tracker/alert tables remain inaccessible through direct anon/authenticated REST grants.
 - Hardware credentials are generated randomly, shown once, and stored hashed.
 - The HTTPS GT06/NMEA adapters do not accept raw TCP; the legacy raw TCP receiver needs a separate gateway.
-- Realtime/alerts are not yet ported; location ingestion does not fan out Socket.IO events or evaluate alert rules.
+- Alert rules are evaluated by the staged database trigger on location inserts. Socket.IO/realtime fan-out and push delivery are still not ported; the mobile client polls.

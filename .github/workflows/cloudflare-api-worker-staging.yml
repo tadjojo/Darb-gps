@@ -33,6 +33,10 @@ jobs:
         run: npm test
       - name: Validate Worker bundle
         run: npm run check
+      - name: Check deployment credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN secret" && exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID secret" && exit 1)
       - name: Deploy staging Worker
         run: npx wrangler deploy
         env:

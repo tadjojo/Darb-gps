@@ -79,10 +79,10 @@
   connectDarbRealtime();
 }
 startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textContent=err.message;}}
-  async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if(alertPollTimer){clearInterval(alertPollTimer);alertPollTimer=null;}stopLiveLocationPolling();alertKnownIds.clear();alertBaselineReady=false;if (darbSocket) {
+  async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if(alertPollTimer){clearInterval(alertPollTimer);alertPollTimer=null;}alertKnownIds.clear();alertBaselineReady=false;if (darbSocket) {
   darbSocket.disconnect();
   darbSocket = null;
-}token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
+}stopLiveLocationPolling();token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
   async function createOrganization(){
     const name=$('orgName').value.trim();
     const msg=$('settingsMessage');
@@ -329,7 +329,7 @@ function stopLiveLocationPolling() {
   }
 }
 function startLiveLocationPolling() {
-  if (!token || liveLocationPollTimer) return;
+  if (!token || liveLocationPollTimer || document.visibilityState === 'hidden') return;
   // REST fallback uses one request per tracked vehicle; 60s keeps Free-plan usage bounded.
   liveLocationPollTimer = setInterval(pollLatestLocations, 60000);
 }
@@ -445,6 +445,16 @@ function connectDarbRealtime() {
     startLiveLocationPolling();
   });
 }
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pollAlertUpdates();});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      pollAlertUpdates();
+      if(token&&(!darbSocket||!darbSocket.connected)){
+        startLiveLocationPolling();
+        pollLatestLocations();
+      }
+    }else{
+      stopLiveLocationPolling();
+    }
+  });
   document.addEventListener('DOMContentLoaded',start);
 })();

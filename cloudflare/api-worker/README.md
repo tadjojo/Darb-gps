@@ -72,6 +72,13 @@ npx wrangler deploy
 
 Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `ALLOWED_ORIGINS` through the Cloudflare dashboard or Wrangler. Do not deploy this prototype as a replacement until the migration gate is met.
 
+## Request and security limits
+
+- HTTP request bodies are capped at 64 KiB; requests are rejected with HTTP 413 when declared or streamed payloads exceed the limit.
+- Responses include restrictive content security and anti-framing headers.
+- Browser CORS is restricted to configured `ALLOWED_ORIGINS`; non-browser mobile clients are supported.
+- Do not use this Worker as the raw TCP endpoint for tracker devices; HTTP(S) adapters are supported while TCP ingress remains a separate gateway.
+
 ## Migration safety
 
 - Multi-table writes use transactional Postgres RPCs.

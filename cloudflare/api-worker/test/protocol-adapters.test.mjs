@@ -22,7 +22,7 @@ test("NMEA GGA requires paired timestamp and rejects checksum errors",async()=>{
 test("GT06 HTTPS adapter validates frame CRC and applies configured UTC offset",async()=>{
  const old=globalThis.fetch;let calls=0,profileArgs={},ingestArgs={};
  globalThis.fetch=async(_i,init={})=>{calls++;const args=JSON.parse(init.body||"{}");if(calls===1){profileArgs=args;return new Response(JSON.stringify({protocol:"gt06",timezone_offset_minutes:180}),{status:200});}ingestArgs=args;return new Response(JSON.stringify({accepted:true,duplicate:false}),{status:200});};
- try{const frame=gt06Frame();const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,200);assert.equal(calls,2);assert.equal(profileArgs.p_credential_hash,await sha("tracker-secret"));assert.equal(ingestArgs.p_protocol,"gt06");assert.equal(ingestArgs.p_latitude,31.95);assert.equal(ingestArgs.p_longitude,35.91);assert.equal(ingestArgs.p_recorded_at,"2026-11-25T07:00:00.000Z");}finally{globalThis.fetch=old;}
+ try{const frame=gt06Frame();const res=await worker.fetch(new Request("https://worker.test/api/v1/device-gateway/ingest/gt06",{method:"POST",headers:auth,body:JSON.stringify({frameHex:frame})}),env);assert.equal(res.status,200);assert.equal(calls,2);assert.equal(profileArgs.p_credential_hash,await sha("tracker-secret"));assert.equal(ingestArgs.p_protocol,"gt06");assert.equal(ingestArgs.p_latitude,31.95);assert.equal(ingestArgs.p_longitude,-35.91);assert.equal(ingestArgs.p_recorded_at,"2026-11-25T07:00:00.000Z");}finally{globalThis.fetch=old;}
 });
 
 

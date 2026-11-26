@@ -73,6 +73,9 @@ class _HomePageState extends State<HomePage> {
   String? vehicleId, deviceId, organizationId;
   int pendingCount = 0;
   List<Map<String, dynamic>> registeredDevices = [];
+  List<Map<String, dynamic>> organizationOptions = [];
+  List<Map<String, dynamic>> vehicleOptions = [];
+  bool loadingOrganizations = false;
   bool loadingDevices = false;
   List<Map<String, dynamic>> tripHistory = [];
   List<Map<String, dynamic>> stopHistory = [];
@@ -106,7 +109,7 @@ class _HomePageState extends State<HomePage> {
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
     if (mounted) setState(() {});
-    if (loggedIn && vehicleId != null) await _connectRealtime();
+    if (loggedIn) { try { await _loadOrganizations(); } catch (_) { if (vehicleId != null) await _connectRealtime(); } }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
       if (!loggedIn) return;
@@ -137,7 +140,72 @@ class _HomePageState extends State<HomePage> {
       await api.login(_identifier.text, _password.text);
       if (!mounted) return;
       setState(() { loggedIn = true; message = tr('تم تسجيل الدخول بأمان', 'Signed in securely'); });
-      if (vehicleId != null) await _connectRealtime();
+      await _loadOrganizations();
+    } catch (e) { _showError(e); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
+
+  Future<void> _loadOrganizations() async {
+    if (!loggedIn || loadingOrganizations) return;
+    setState(() => loadingOrganizations = true);
+    try {
+      final rows = await api.listOrganizations();
+      final savedOrg = organizationId;
+      final preferred = rows.any((o) => o['id']?.toString() == savedOrg) ? savedOrg : (rows.isNotEmpty ? rows.first['id']?.toString() : null);
+      if (mounted) setState(() { organizationOptions = rows; organizationId = preferred; });
+      if (preferred == null) {
+        vehicleOptions = [];
+        vehicleId = null;
+        deviceId = null;
+        await _storage.delete(key: 'organization_id');
+        await _storage.delete(key: 'vehicle_id');
+        if (mounted) setState(() => message = tr('لا توجد مؤسسة مرتبطة بالحساب؛ أنشئ مؤسسة جديدة.', 'No organization is linked to this account. Create one.'));
+        return;
+      }
+      await _storage.write(key: 'organization_id', value: preferred);
+      await _loadOrganizationVehicles(preferred, preferSaved: true);
+    } catch (e) {
+      _showError(e);
+    } finally {
+      if (mounted) setState(() => loadingOrganizations = false);
+    }
+  }
+
+  Future<void> _loadOrganizationVehicles(String orgId, {bool preferSaved = false}) async {
+    final rows = await api.listVehicles(orgId);
+    final options = rows.whereType<Map>().map((v) => Map<String, dynamic>.from(v)).where((v) => v['status'] == null || v['status'] == 'active').toList();
+    final savedVehicle = preferSaved ? vehicleId : null;
+    final selected = options.any((v) => v['id']?.toString() == savedVehicle) ? savedVehicle : (options.isNotEmpty ? options.first['id']?.toString() : null);
+    if (!mounted) return;
+    setState(() { vehicleOptions = options; vehicleId = selected; deviceId = null; });
+    if (selected == null) {
+      await _storage.delete(key: 'vehicle_id');
+      if (mounted) setState(() => message = tr('لا توجد مركبات في المؤسسة المحددة؛ أضف مركبة جديدة.', 'No vehicles in this organization. Add one.'));
+      return;
+    }
+    await _storage.write(key: 'vehicle_id', value: selected);
+    await _connectRealtime();
+    await _loadDevices();
+  }
+
+  Future<void> _selectOrganization(String? id) async {
+    if (id == null || id == organizationId || busy) return;
+    setState(() { busy = true; organizationId = id; vehicleId = null; deviceId = null; });
+    try {
+      await _storage.write(key: 'organization_id', value: id);
+      await _storage.delete(key: 'vehicle_id');
+      await _loadOrganizationVehicles(id);
+    } catch (e) { _showError(e); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
+
+  Future<void> _selectVehicle(String? id) async {
+    if (id == null || id == vehicleId || busy) return;
+    setState(() { busy = true; vehicleId = id; deviceId = null; });
+    try {
+      await _storage.write(key: 'vehicle_id', value: id);
+      await _connectRealtime();
+      await _loadDevices();
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => busy = false); }
   }
@@ -579,6 +647,25 @@ class _HomePageState extends State<HomePage> {
     TextField(controller: _password, obscureText: true, decoration: InputDecoration(labelText: tr('كلمة المرور', 'Password'))),
     const SizedBox(height: 8),
     FilledButton(onPressed: busy ? null : _login, child: Text(busy ? tr('يرجى الانتظار', 'Please wait') : tr(loggedIn ? 'تحديث تسجيل الدخول' : 'تسجيل الدخول', loggedIn ? 'Refresh login' : 'Sign in'))),
+    if (loggedIn) ...[
+      const Divider(height: 28),
+      Text(tr('اختيار المؤسسة والمركبة', 'Select organization & vehicle'), style: const TextStyle(fontWeight: FontWeight.bold)),
+      DropdownButtonFormField<String>(
+        value: organizationId,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr('المؤسسة', 'Organization')),
+        items: organizationOptions.map((o) => DropdownMenuItem<String>(value: o['id']?.toString(), child: Text(o['name']?.toString() ?? tr('مؤسسة', 'Organization')))).toList(),
+        onChanged: busy ? null : _selectOrganization,
+      ),
+      DropdownButtonFormField<String>(
+        value: vehicleId,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr('المركبة', 'Vehicle')),
+        items: vehicleOptions.map((v) => DropdownMenuItem<String>(value: v['id']?.toString(), child: Text(v['display_name']?.toString() ?? v['displayName']?.toString() ?? tr('مركبة', 'Vehicle')))).toList(),
+        onChanged: busy || organizationId == null ? null : _selectVehicle,
+      ),
+      OutlinedButton.icon(onPressed: busy || loadingOrganizations ? null : _loadOrganizations, icon: const Icon(Icons.refresh), label: Text(tr('تحديث المؤسسات والمركبات', 'Refresh organizations & vehicles'))),
+    ],
     const Divider(height: 28),
     Text(tr('إنشاء مؤسسة ومركبة', 'Create organization & vehicle'), style: const TextStyle(fontWeight: FontWeight.bold)),
     TextField(controller: _orgName, decoration: InputDecoration(labelText: tr('اسم المؤسسة', 'Organization name'))),

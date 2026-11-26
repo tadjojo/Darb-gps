@@ -388,7 +388,9 @@ export default {
         const limit = parseLimit(url.searchParams.get("limit"), 250, 1, 500);
         const offset = parseLimit(url.searchParams.get("offset"), 0, 0, 1000000);
         if (limit === null || offset === null) return json({ message: "Invalid pagination parameters" }, 400, headers);
-        const organizationId = decodeURIComponent(orgLatestLocationsMatch[1]);
+        let organizationId;
+        try { organizationId = decodeURIComponent(orgLatestLocationsMatch[1]); } catch { return json({ message: "Invalid organization ID" }, 400, headers); }
+        if (!UUID_RE.test(organizationId)) return json({ message: "Invalid organization ID" }, 400, headers);
         const { response, data } = await supabaseRpc(
           env,
           "darb_api_latest_locations_for_organization",

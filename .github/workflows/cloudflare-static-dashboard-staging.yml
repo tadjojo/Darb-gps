@@ -40,6 +40,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Ensure staging Pages project exists
+        run: |
+          if npx wrangler pages project list | grep -Fq "darb-gps-web-staging"; then
+            echo "Staging Pages project already exists"
+          else
+            npx wrangler pages project create darb-gps-web-staging --production-branch main
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy staging Pages project
         run: npx wrangler pages deploy dist-web --project-name darb-gps-web-staging --branch staging
         env:

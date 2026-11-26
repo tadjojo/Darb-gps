@@ -15,7 +15,7 @@ All four PR workflows completed successfully:
 - Production API smoke test — success, but checks the legacy API baseline, not a deployed Worker.
 
 ## Worker security baseline
-- Added Cloudflare Rate Limiting bindings: auth 20/min per IP (login/refresh), tracker endpoints 120/min keyed by SHA-256 credential hash. Rejected calls return 429/Retry-After; configured limiter errors fail closed. These limits are approximate per Cloudflare location and may require production tuning.
+- Added Cloudflare Rate Limiting bindings: auth 20/min per IP (login/refresh), authenticated API 300/min per SHA-256 bearer hash, tracker endpoints 120/min keyed by SHA-256 credential hash. Rejected calls return 429/Retry-After; configured limiter errors fail closed. These limits are approximate per Cloudflare location and may require production tuning.
 - Strict CORS allowlist; non-allowlisted origins rejected.
 - Response headers: restrictive CSP, nosniff, no-referrer, anti-frame, no-store.
 - Request body limited to 64 KiB, both declared Content-Length and streamed bytes.

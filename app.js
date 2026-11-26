@@ -374,6 +374,10 @@ function connectDarbRealtime() {
     catch { return false; }
   })();
   if (isFreeWorkerApi || !window.io || !apiBase || !token) {
+    if (darbSocket) {
+      darbSocket.disconnect();
+      darbSocket = null;
+    }
     console.info('DARB: Socket.IO unavailable on the selected API; using REST location polling');
     startLiveLocationPolling();
     return;

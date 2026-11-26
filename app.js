@@ -72,6 +72,22 @@
     if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);
     return data;
   }
+  async function fetchAllLatestLocations(organizationId){
+    const rows=[];
+    let offset=0;
+    const pageSize=250;
+    while(true){
+      const page=await api(`/organizations/${encodeURIComponent(organizationId)}/locations/latest?limit=${pageSize}&offset=${offset}`);
+      if(Array.isArray(page)){rows.push(...page);break;}
+      const pageRows=Array.isArray(page?.data)?page.data:[];
+      rows.push(...pageRows);
+      const next=page?.nextOffset;
+      if(!Number.isInteger(next)||next<=offset)break;
+      offset=next;
+      if(offset>1000000)throw new Error('Fleet pagination safety limit exceeded');
+    }
+    return rows;
+  }
   function applyLatestLocation(vehicle, location){
     if(!location||!Number.isFinite(Number(location.latitude))||!Number.isFinite(Number(location.longitude)))return vehicle;
     const time=Date.parse(location.recorded_at||location.recordedAt||'');
@@ -85,10 +101,7 @@
     const list=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.items||data.vehicles||[]));
     const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));
     let batchRows=null;
-    try{
-      const batch=await api(`/organizations/${encodeURIComponent(orgId)}/locations/latest`);
-      batchRows=Array.isArray(batch)?batch:(Array.isArray(batch?.data)?batch.data:[]);
-    }catch(error){batchRows=null;}
+    try{batchRows=await fetchAllLatestLocations(orgId);}catch(error){batchRows=null;}
     if(batchRows!==null){
       const byVehicle=new Map(batchRows.map(row=>[String(row.vehicle_id),row.location]));
       vehicles=base.map(v=>applyLatestLocation(v,byVehicle.get(String(v.id))));
@@ -367,8 +380,7 @@ async function pollLatestLocations() {
     const isFreeWorkerApi = (() => { try { return new URL(apiBase).hostname.startsWith('darb-gps-free-api'); } catch { return false; } })();
     if (isFreeWorkerApi && orgId) {
       try {
-        const batch = await api(`/organizations/${encodeURIComponent(orgId)}/locations/latest`);
-        const rows = Array.isArray(batch) ? batch : (Array.isArray(batch?.data) ? batch.data : []);
+        const rows = await fetchAllLatestLocations(orgId);
         const byVehicle = new Map(rows.map(row => [String(row.vehicle_id), row.location]));
         tracked.forEach(v => {
           const next = applyLatestLocation(v, byVehicle.get(String(v.id)));

@@ -34,6 +34,8 @@ jobs:
           test -s dist-web/app.js
           test -s dist-web/styles.css
           test -s dist-web/dashboard-help.html
+          grep -q 'app.js' dist-web/index.html
+          grep -q 'styles.css' dist-web/index.html
       - name: Check Cloudflare secrets
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN secret" && exit 1)
@@ -56,9 +58,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Smoke-test Pages staging preview
+      - name: Smoke-test Pages staging preview and assets
         run: |
           preview_url="https://staging.darb-gps-web-staging.pages.dev"
           curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$preview_url/" -o /tmp/darb-preview.html
           grep -q "دَرْب GPS" /tmp/darb-preview.html
-          echo "Static dashboard preview is responding: $preview_url"
+          for asset in app.js styles.css dashboard-help.html; do
+            curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$preview_url/$asset" -o "/tmp/darb-$asset"
+            test -s "/tmp/darb-$asset"
+          done
+          echo "Static dashboard preview and assets are responding: $preview_url"

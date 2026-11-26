@@ -44,3 +44,10 @@ All four PR workflows completed successfully:
 - Production Flutter API default remains unchanged.
 - PR #46 stays draft until staging verification and review.
 - Debug APKs are not release-signed.
+
+## Added staging deployment automation (2026-11-26 continuation)
+- Manual Cloudflare Worker API staging deployment workflow: `.github/workflows/cloudflare-api-worker-staging.yml`. Requires explicit confirmation and Cloudflare secrets; runs tests and Wrangler dry-run before deployment.
+- Manual static dashboard Pages staging workflow: `.github/workflows/cloudflare-static-dashboard-staging.yml`. Copies only `index.html`, `app.js`, `styles.css` to a clean static output directory and deploys to a separate Pages project `darb-gps-web-staging` on preview branch `staging`.
+- Updated Cloudflare guide to describe Free Workers/Pages migration as the target; legacy NestJS Container requires paid plan and remains separate.
+- Latest Worker validation on commit `0b151531` passed with 56 test? Note at that commit there were 56? The authenticated API limiter test was added later; the last confirmed test count was 55 at `0b151531`. Newer commits add a fourth rate-limit test and CI is being rechecked at the current branch head.
+- Neither staging workflow has been run; Cloudflare credentials are not connected in this session. Production remains unchanged.

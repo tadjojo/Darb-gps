@@ -48,7 +48,7 @@ test("CORS preflight for approved origin", async () => {
 });
 
 test("unmigrated API routes are explicit and not falsely successful", async () => {
-  const res = await worker.fetch(new Request("https://worker.test/api/v1/organizations"), env);
+  const res = await worker.fetch(new Request("https://worker.test/api/v1/admin/dashboard"), env);
   assert.equal(res.status, 501);
   const payload = await res.json();
   assert.equal(payload.status, "not_implemented");

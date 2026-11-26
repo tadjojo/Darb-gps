@@ -70,3 +70,9 @@ All four PR workflows completed successfully:
 - Supabase RPC now pages vehicles deterministically and emits only latitude/longitude/speed/heading/recorded timestamp for latest locations, avoiding exposure of arbitrary location table columns and unbounded response payloads.
 - Static dashboard startup and 60-second polling iterate bounded pages. Legacy array response compatibility is retained in its helper.
 - Worker route tests cover pagination forwarding/response, bearer-auth requirement, and invalid limits.
+
+## Organization discovery for mobile and web
+- Added `GET /api/v1/organizations` with the authenticated `darb_api_list_organizations` RPC. It returns only active organizations with active membership for the current user.
+- Static dashboard now loads/selects organizations after login; manual organization ID remains as compatibility fallback. Organization creation refreshes the selector.
+- Flutter client now lists organizations, loads active vehicles for selected organization, and exposes organization/vehicle dropdowns in settings. After provisioning, selection refreshes before enrolling the phone.
+- Added Worker tests for list response and auth rejection; current Worker suite target is 64 tests.

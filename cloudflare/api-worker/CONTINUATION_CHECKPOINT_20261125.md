@@ -49,5 +49,5 @@ All four PR workflows completed successfully:
 - Manual Cloudflare Worker API staging deployment workflow: `.github/workflows/cloudflare-api-worker-staging.yml`. Requires explicit confirmation and Cloudflare secrets; runs tests and Wrangler dry-run before deployment.
 - Manual static dashboard Pages staging workflow: `.github/workflows/cloudflare-static-dashboard-staging.yml`. Copies only `index.html`, `app.js`, `styles.css` to a clean static output directory and deploys to a separate Pages project `darb-gps-web-staging` on preview branch `staging`.
 - Updated Cloudflare guide to describe Free Workers/Pages migration as the target; legacy NestJS Container requires paid plan and remains separate.
-- Latest Worker validation on commit `0b151531` passed with 56 test? Note at that commit there were 56? The authenticated API limiter test was added later; the last confirmed test count was 55 at `0b151531`. Newer commits add a fourth rate-limit test and CI is being rechecked at the current branch head.
+- Worker validation on commit `0b151531` passed (55 tests + Wrangler dry-run). Subsequent code adds authenticated API throttling and one test; the current test suite has 56 tests and CI is being rechecked on the current head.
 - Neither staging workflow has been run; Cloudflare credentials are not connected in this session. Production remains unchanged.

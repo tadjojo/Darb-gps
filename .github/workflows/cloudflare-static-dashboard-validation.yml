@@ -28,6 +28,9 @@ jobs:
           grep -q 'styles.css' index.html
           grep -q 'app.js' index.html
           grep -q 'dashboard-help.html' index.html
+          grep -q 'orgSelect' index.html
+          grep -q 'refreshOrganizations' index.html
+          grep -q 'loadOrganizations' app.js
       - name: JavaScript syntax check
         run: node --check app.js
       - name: Prepare and verify Pages bundle

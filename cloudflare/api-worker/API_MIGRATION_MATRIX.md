@@ -15,6 +15,7 @@ CI validates Node tests and Wrangler bundle.
 
 ## Stage 1 — Organizations and vehicles (prototype routes implemented; SQL migration staged)
 
+- `GET /api/v1/organizations` — list active organizations for the authenticated user (new RPC)
 - `POST /api/v1/organizations`
 - `POST /api/v1/organizations/:organizationId/vehicles`
 - `GET /api/v1/organizations/:organizationId/vehicles`

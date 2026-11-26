@@ -352,6 +352,15 @@ export default {
       }
 
 
+      if (url.pathname === "/api/v1/organizations" && request.method === "GET") {
+        const authorization = request.headers.get("Authorization") || "";
+        if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);
+        if (!supabaseConfigured(env)) return json({ message: "API configuration unavailable" }, 503, headers);
+        const { response, data } = await supabaseRpc(env, "darb_api_list_organizations", {}, authorization);
+        if (!response.ok) return json({ message: "Organization list unavailable" }, rpcErrorStatus(response, data), headers);
+        return json({ data: Array.isArray(data) ? data : [] }, 200, headers);
+      }
+
       if (url.pathname === "/api/v1/organizations" && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
         if (!authorization.startsWith("Bearer ")) return json({ message: "Authentication required" }, 401, headers);

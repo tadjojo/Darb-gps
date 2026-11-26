@@ -203,7 +203,7 @@ async function supabaseRpc(env, functionName, args, authorization) {
 
 
 
-async function hashTrackerBearer(authorization) {
+async function hashBearerCredential(authorization) {
   if (!authorization) return null;
   const normalized = authorization.trim();
   const separator = normalized.indexOf(" ");
@@ -302,6 +302,15 @@ export default {
         supabaseConfigured: configured,
         note: "Readiness checks configuration only; no database connectivity test is performed.",
       }, configured ? 200 : 503, headers);
+    }
+
+    // Authenticated API traffic is limited by a hash of its bearer token. Hardware
+    // gateways use the dedicated credential limiter below instead.
+    const authHeader = request.headers.get("Authorization") || "";
+    if (!url.pathname.startsWith("/api/v1/device-gateway/") && authHeader.startsWith("Bearer ")) {
+      const userTokenHash = await hashBearerCredential(authHeader);
+      const limited = await rateLimitResponse(env.USER_API_RATE_LIMIT, `user:${userTokenHash}`, headers);
+      if (limited) return limited;
     }
 
     try {
@@ -553,7 +562,7 @@ export default {
 
       if (url.pathname === "/api/v1/device-gateway/ingest" && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
-        const credentialHash = await hashTrackerBearer(authorization);
+        const credentialHash = await hashBearerCredential(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
         const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
         if (limited) return limited;
@@ -582,7 +591,7 @@ export default {
 
       if (url.pathname === "/api/v1/device-gateway/heartbeat/gt06" && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
-        const credentialHash = await hashTrackerBearer(authorization);
+        const credentialHash = await hashBearerCredential(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
         const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
         if (limited) return limited;
@@ -594,7 +603,7 @@ export default {
 
       if (url.pathname === "/api/v1/device-gateway/ingest/nmea" && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
-        const credentialHash = await hashTrackerBearer(authorization);
+        const credentialHash = await hashBearerCredential(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
         const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
         if (limited) return limited;
@@ -614,7 +623,7 @@ export default {
 
       if (url.pathname === "/api/v1/device-gateway/ingest/gt06" && request.method === "POST") {
         const authorization = request.headers.get("Authorization") || "";
-        const credentialHash = await hashTrackerBearer(authorization);
+        const credentialHash = await hashBearerCredential(authorization);
         if (!credentialHash) return json({ message: "GPS tracker credential required" }, 401, headers);
         const limited = await rateLimitResponse(env.TRACKER_RATE_LIMIT, `tracker:${credentialHash}`, headers);
         if (limited) return limited;

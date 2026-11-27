@@ -1,6 +1,9 @@
 name: Deploy DARB GPS API to Cloudflare Staging
 
 on:
+  push:
+    branches:
+      - cloudflare-free-api-migration-next
   workflow_dispatch:
     inputs:
       confirm_staging_deploy:
@@ -14,7 +17,7 @@ permissions:
 
 jobs:
   validate-and-deploy:
-    if: inputs.confirm_staging_deploy == true
+    if: github.event_name == 'push' || inputs.confirm_staging_deploy == true
     runs-on: ubuntu-latest
     environment: cloudflare-staging
     defaults:

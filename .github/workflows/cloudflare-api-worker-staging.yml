@@ -70,7 +70,7 @@ jobs:
           api_url="https://darb-gps-free-api-staging.$subdomain.workers.dev"
           curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$api_url/api/v1/health/live"
           readiness=$(curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$api_url/api/v1/health/ready")
-          echo "$readiness" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);if(j.status!==\"ready\"||j.supabaseConfigured!==true){console.error(\"Worker readiness failed: Supabase configuration is missing\");process.exit(1)}console.log(\"Worker readiness configuration passed (connectivity is not tested)\")})"
+          echo "$readiness" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);if(j.status!==\"ready\"||j.supabaseConfigured!==true){console.error(\"Worker readiness failed: Supabase configuration or service role secret is missing\");process.exit(1)}console.log(\"Worker readiness configuration and service-role secret passed (connectivity is not tested)\")})"
           echo "Staging Worker liveness and configuration readiness passed at $api_url"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

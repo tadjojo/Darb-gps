@@ -300,6 +300,7 @@ export default {
         status: configured ? "ready" : "not_ready",
         service: "darb-gps-api",
         supabaseConfigured: configured,
+        serviceRoleConfigured: serviceConfigured(env),
         note: "Readiness checks configuration only; no database connectivity test is performed.",
       }, configured ? 200 : 503, headers);
     }

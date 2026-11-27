@@ -3,9 +3,9 @@
 **Do not deploy this Worker as the production API yet.** PR #46 is a draft and the required Supabase migrations are staged, not applied.
 
 ## Worker project
-- Worker name: `darb-gps-free-api`
+- Worker name: `darb-gps-free-api-staging`
 - Wrangler file: `cloudflare/api-worker/wrangler.toml`
-- Expected workers.dev host: `https://darb-gps-free-api.<account-subdomain>.workers.dev` (confirm after staging deployment)
+- Expected workers.dev host: `https://darb-gps-free-api-staging.<account-subdomain>.workers.dev` (confirm after staging deployment)
 - Worker root: `cloudflare/api-worker`
 - Validation: `npm test` and `npm run check`
 
@@ -14,7 +14,7 @@ A manually gated workflow was added: `.github/workflows/cloudflare-api-worker-st
 1. Open repository Settings → Secrets and variables → Actions; add repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Never paste these into chat or commit them.
 2. Create a Cloudflare API token scoped only to the target account with Workers Scripts **Edit** and Account Settings **Read** permissions (avoid broad account/global tokens).
 3. GitHub Actions → Deploy DARB GPS API to Cloudflare Staging → Run workflow. Leave confirmation unchecked to abort; check it only when intending a staging deploy.
-4. Workflow runs tests and Wrangler dry-run first, then deploys `darb-gps-free-api`. It does not deploy the production app/API or change the Flutter API base URL.
+4. Workflow runs tests and Wrangler dry-run first, then deploys `darb-gps-free-api-staging`. It does not deploy the production app/API or change the Flutter API base URL.
 5. The workflow smoke-tests `/api/v1/health/live` and `/api/v1/health/ready`; readiness confirms configuration is present, but does not prove Supabase connectivity.
 
 The workflow requires secrets and will fail closed if either is missing. Configure an environment protection rule for `cloudflare-staging` if approval-before-deploy is desired.

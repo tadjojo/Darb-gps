@@ -1,4 +1,4 @@
-name = "darb-gps-free-api"
+name = "darb-gps-free-api-staging"
 main = "src/index.mjs"
 compatibility_date = "2026-11-25"
 workers_dev = true

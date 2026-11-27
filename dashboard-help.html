@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1730">
+  <title>دَرْب GPS — دليل الربط</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#16233b;background:#f4f7fb}
+    body{margin:0;padding:24px;line-height:1.8}
+    main{max-width:850px;margin:auto;background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 28px #14243a12}
+    h1,h2{color:#12305a}code{direction:ltr;display:inline-block;background:#f0f4fa;padding:6px 10px;border-radius:7px;overflow-wrap:anywhere}
+    li{margin:10px 0}.note{padding:12px 16px;background:#fff5dd;border-right:4px solid #d9a334;border-radius:8px}
+    a{color:#1769aa}
+  </style>
+</head>
+<body>
+<main>
+  <h1>دَرْب GPS — دليل الإعداد والربط</h1>
+  <p>هذه لوحة تجريبية للملاحة وتتبع المركبات. في وضع العرض التجريبي، البيانات المعروضة أمثلة ولا تمثل مركبات حقيقية.</p>
+  <h2>ربط API</h2>
+  <ol>
+    <li>افتح من القائمة الجانبية <b>الإعدادات والربط</b>.</li>
+    <li>أدخل عنوان API المنشور مع المسار <code>/api/v1</code>.</li>
+    <li>بعد تسجيل الدخول، تُحمّل المؤسسات المرتبطة بحسابك تلقائيًا؛ اختر المؤسسة من القائمة. ويمكنك استخدام معرّف المؤسسة اليدوي عند الحاجة.</li>
+    <li>اضغط <b>اختبار الاتصال</b> ثم سجّل الدخول.</li>
+  </ol>
+  <p>عنوان Worker staging المتوقع (بعد النشر):</p>
+  <code>https://darb-gps-free-api.&lt;account-subdomain&gt;.workers.dev/api/v1</code>
+  <div class="note"><b>تنبيه:</b> لا تدخل مفاتيح Supabase السرية أو Service Role أو كلمات المرور في عنوان API أو هذه الصفحة. يجب أن تبقى الأسرار على الخادم/Worker فقط.</div>
+  <h2>حدود نسخة Cloudflare Free</h2>
+  <ul>
+    <li>الواجهة تستخدم طلب REST مجمّع للمواقع، ثم تحديثًا كل 60 ثانية عند عدم توفر Socket.IO.</li>
+    <li>تحديث GPS كل 5 ثوانٍ يستهلك نحو 17,280 طلبًا يوميًا لكل جهاز؛ حد Workers Free الحالي 100,000 طلب يوميًا للحساب.</li>
+    <li>تتطلب نسخة staging قاعدة Supabase staging منفصلة. لا تربط Worker التجريبي بقاعدة الإنتاج قبل اختبار الصلاحيات والتراجع.</li>
+  </ul>
+  <p><a href="index.html">العودة إلى لوحة دَرْب GPS</a></p>
+</main>
+</body>
+</html>

@@ -113,6 +113,7 @@ class DarbClient {
       switch (method) {
         case 'GET': return http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
         case 'POST': return http.post(uri, headers: headers, body: payload).timeout(const Duration(seconds: 12));
+        case 'PATCH': return http.patch(uri, headers: headers, body: payload).timeout(const Duration(seconds: 12));
         default: throw UnsupportedError('HTTP method not supported');
       }
     }
@@ -122,6 +123,13 @@ class DarbClient {
       if (token != null) response = await send(token);
     }
     return response;
+  }
+
+  Future<List<Map<String, dynamic>>> listOrganizations() async {
+    final response = await authorized('GET', '/api/v1/organizations');
+    final value = _decode(response);
+    final rows = value['data'];
+    return rows is List ? rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList() : <Map<String, dynamic>>[];
   }
 
   Future<Map<String, dynamic>> createOrganization(String name) async {
@@ -157,7 +165,16 @@ class DarbClient {
     final response = await authorized('GET', '/api/v1/tracking/devices/vehicle/$vehicleId');
     final value = _decode(response);
     final rows = value['data'] is List ? value['data'] as List : <dynamic>[];
-    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+    return rows.whereType<Map>().map((row) {
+      final device = Map<String, dynamic>.from(row);
+      device['device_label'] = device['label'] ?? (device['device_type'] == 'mobile' ? 'Mobile' : 'GPS Tracker');
+      device['model_name'] = device['model'];
+      device['last_protocol'] = device['protocol'];
+      final lastSeenValue = device['last_seen_at'];
+      final lastSeen = lastSeenValue is String ? DateTime.tryParse(lastSeenValue)?.toLocal() : null;
+      device['connectionStatus'] = device['status'] != 'active' ? device['status'] : lastSeen == null ? 'never_connected' : DateTime.now().difference(lastSeen).inMinutes <= 2 ? 'online' : 'offline';
+      return device;
+    }).toList(growable: false);
   }
 
   Future<List<Map<String, dynamic>>> listTrips(String vehicleId, {required DateTime from, required DateTime to, int limit = 50}) async {
@@ -201,6 +218,44 @@ class DarbClient {
     return _decode(response);
   }
 
+
+  Future<List<Map<String, dynamic>>> listAlerts({String? status, String? vehicleId, int limit = 100}) async {
+    final query = Uri(queryParameters: {
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (vehicleId != null && vehicleId.isNotEmpty) 'vehicleId': vehicleId,
+      'limit': '$limit',
+    }).query;
+    final response = await authorized('GET', '/api/v1/alerts?$query');
+    final value = _decode(response);
+    final rows = value['data'] is List ? value['data'] as List : <dynamic>[];
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> listAlertRules({String? vehicleId}) async {
+    final query = Uri(queryParameters: {if (vehicleId != null && vehicleId.isNotEmpty) 'vehicleId': vehicleId}).query;
+    final path = query.isEmpty ? '/api/v1/alerts/rules' : '/api/v1/alerts/rules?$query';
+    final response = await authorized('GET', path);
+    final value = _decode(response);
+    final rows = value['data'] is List ? value['data'] as List : <dynamic>[];
+    return rows.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> createAlertRule(String vehicleId, String type, String name, Map<String, dynamic> config, {bool enabled = true}) async {
+    final response = await authorized('POST', '/api/v1/alerts/rules', body: {
+      'vehicleId': vehicleId, 'type': type, 'name': name, 'config': config, 'enabled': enabled,
+    });
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> acknowledgeAlert(String alertId) async {
+    final response = await authorized('PATCH', '/api/v1/alerts/$alertId/acknowledge');
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> resolveAlert(String alertId) async {
+    final response = await authorized('PATCH', '/api/v1/alerts/$alertId/resolve');
+    return _decode(response);
+  }
   Map<String, dynamic> _decode(http.Response response) {
     dynamic value;
     try { value = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body); }

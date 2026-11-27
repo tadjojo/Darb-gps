@@ -1,0 +1,80 @@
+name: Deploy DARB GPS API to Cloudflare Staging
+
+on:
+  push:
+    branches:
+      - cloudflare-free-api-migration-next
+  workflow_dispatch:
+    inputs:
+      confirm_staging_deploy:
+        description: Confirm deployment to the staging Worker (never production)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-deploy:
+    if: github.event_name == 'push' || inputs.confirm_staging_deploy == true
+    runs-on: ubuntu-latest
+    environment: cloudflare-staging
+    defaults:
+      run:
+        working-directory: cloudflare/api-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Run tests
+        run: npm test
+      - name: Validate Worker bundle
+        run: npm run check
+      - name: Check deployment credentials and Supabase configuration
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN secret" && exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID secret" && exit 1)
+          test -n "$SUPABASE_URL" || (echo "Missing SUPABASE_URL secret" && exit 1)
+          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "Missing SUPABASE_PUBLISHABLE_KEY secret" && exit 1)
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || (echo "Missing SUPABASE_SERVICE_ROLE_KEY secret" && exit 1)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Deploy staging Worker with Supabase configuration
+        run: npx wrangler deploy --var "SUPABASE_URL:$SUPABASE_URL" --var "SUPABASE_PUBLISHABLE_KEY:$SUPABASE_PUBLISHABLE_KEY"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Configure staging Worker secret
+        run: printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Smoke-test deployed Worker liveness and configuration readiness
+        run: |
+          subdomain=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);if(j.success&&j.result?.subdomain)process.stdout.write(j.result.subdomain);else process.exit(2);})")
+          test -n "$subdomain"
+          api_url="https://darb-gps-free-api-staging.$subdomain.workers.dev"
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$api_url/api/v1/health/live"
+          readiness=$(curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-connrefused "$api_url/api/v1/health/ready")
+          echo "$readiness" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);if(j.status!==\"ready\"||j.supabaseConfigured!==true||j.serviceRoleConfigured!==true){console.error(\"Worker readiness failed: Supabase configuration or service role secret is missing\");process.exit(1)}console.log(\"Worker readiness configuration and service-role secret passed (connectivity is not tested)\")})"
+          echo "Staging Worker liveness and configuration readiness passed at $api_url"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

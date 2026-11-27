@@ -9,6 +9,7 @@
     {id:'demo-5',name:'مركبة المتابعة 06',plate:'12-66310',driver:'ليث محمود',status:'moving',updated:'منذ 5 دقائق',lat:31.71,lng:35.793}
   ];
   let vehicles = [...demoVehicles], mapA, mapB, markers = [], routeLayer = null, routeMarkers = [], alertCount = 0, alertKnownIds = new Set(), alertBaselineReady = false, alertPollBusy = false, alertPollTimer = null, token = sessionStorage.getItem('darb_access') || '', refreshToken = sessionStorage.getItem('darb_refresh') || '', refreshPromise = null, socketRefreshInProgress = false;
+  let liveLocationPollTimer = null, liveLocationPollBusy = false;
   let apiBase = localStorage.getItem('darb_api') || 'https://darb-gps-new.tadjojo.workers.dev/api/v1', orgId = localStorage.getItem('darb_org') || '', isEnglish = false;
   const statusText = {moving:'تتحرك',stopped:'متوقفة',offline:'غير متصلة'};
   const vehicleRow = v => `<tr><td><div class="vehicle-cell"><span class="vehicle-icon">▰</span>${escapeHtml(v.name)}</div></td><td dir="ltr">${escapeHtml(v.plate || '—')}</td><td>${escapeHtml(v.driver || '—')}</td><td><span class="status ${v.status}">${statusText[v.status] || 'غير معروف'}</span></td><td>${escapeHtml(v.updated || '—')}</td>${v.id?.startsWith('demo-')?'':'<td></td>'}</tr>`;
@@ -71,17 +72,82 @@
     if(!response.ok)throw new Error(data.message||`فشل الطلب (${response.status})`);
     return data;
   }
-  async function loadVehicles(){if(!token||!orgId)return;const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);const list=Array.isArray(data)?data:(data.items||data.vehicles||[]);const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));vehicles=await Promise.all(base.map(async v=>{try{const loc=await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`);if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))return v;const age=Math.max(0,Date.now()-new Date(loc.recorded_at||loc.recordedAt).getTime());const mins=Math.floor(age/60000);const speed=Number(loc.speed_kmh??loc.speedKmh??0);return {...v,lat:Number(loc.latitude),lng:Number(loc.longitude),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};}catch{return v;}}));renderVehicles();updateStats();drawMarkers();}
+  async function fetchAllLatestLocations(organizationId){
+    const rows=[];
+    let offset=0;
+    const pageSize=250;
+    while(true){
+      const page=await api(`/organizations/${encodeURIComponent(organizationId)}/locations/latest?limit=${pageSize}&offset=${offset}`);
+      if(Array.isArray(page)){rows.push(...page);break;}
+      const pageRows=Array.isArray(page?.data)?page.data:[];
+      rows.push(...pageRows);
+      const next=page?.nextOffset;
+      if(!Number.isInteger(next)||next<=offset)break;
+      offset=next;
+      if(offset>1000000)throw new Error('Fleet pagination safety limit exceeded');
+    }
+    return rows;
+  }
+  function applyLatestLocation(vehicle, location){
+    if(!location||!Number.isFinite(Number(location.latitude))||!Number.isFinite(Number(location.longitude)))return vehicle;
+    const time=Date.parse(location.recorded_at||location.recordedAt||'');
+    const age=Number.isFinite(time)?Math.max(0,Date.now()-time):Infinity;
+    const mins=Math.floor(age/60000),speed=Number(location.speed_kmh??location.speedKmh??0);
+    return {...vehicle,lat:Number(location.latitude),lng:Number(location.longitude),speed,heading:Number(location.heading||0),status:age>10*60000?'offline':speed<=3?'stopped':'moving',updated:mins<1?'الآن':`منذ ${mins} دقيقة`};
+  }
+  async function loadOrganizations(){
+    if(!token)return false;
+    const select=$('orgSelect');if(!select)return false;
+    select.innerHTML='<option value="">جارٍ تحميل المؤسسات…</option>';
+    try{
+      const response=await api('/organizations');
+      const rows=Array.isArray(response)?response:(Array.isArray(response?.data)?response.data:[]);
+      select.innerHTML='';
+      if(!rows.length){
+        select.innerHTML='<option value="">لا توجد مؤسسات مرتبطة بالحساب</option>';
+        orgId='';$('orgId').value='';localStorage.removeItem('darb_org');
+        $('settingsMessage').textContent='لا توجد مؤسسة مرتبطة بالحساب. أنشئ مؤسسة جديدة من هذه الصفحة.';
+        vehicles=[];renderVehicles();updateStats();drawMarkers();return true;
+      }
+      rows.forEach(org=>{const option=document.createElement('option');option.value=String(org.id);option.textContent=String(org.name||'مؤسسة');select.appendChild(option);});
+      const saved=rows.some(org=>String(org.id)===orgId)?orgId:String(rows[0].id);
+      orgId=saved;select.value=saved;$('orgId').value=saved;localStorage.setItem('darb_org',saved);
+      await loadVehicles();connectDarbRealtime();startAlertPolling();
+      return true;
+    }catch(error){
+      select.innerHTML='<option value="">تعذر تحميل المؤسسات</option>';
+      $('settingsMessage').textContent='تعذر تحميل المؤسسات تلقائياً: '+error.message;
+      return false;
+    }
+  }
+  async function selectOrganizationFromList(){
+    const selected=$('orgSelect')?.value||'';
+    if(!selected||selected===orgId)return;
+    orgId=selected;$('orgId').value=selected;localStorage.setItem('darb_org',selected);
+    try{await loadVehicles();connectDarbRealtime();startAlertPolling();$('settingsMessage').textContent='تم اختيار المؤسسة وتحديث المركبات.';}
+    catch(error){$('settingsMessage').textContent='تعذر تحميل المركبات: '+error.message;}
+  }
+  async function loadVehicles(){
+    if(!token||!orgId)return;
+    const data=await api(`/organizations/${encodeURIComponent(orgId)}/vehicles`);
+    const list=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.items||data.vehicles||[]));
+    const base=list.map(v=>({id:v.id,name:v.displayName||v.display_name||'مركبة',plate:v.registrationNumber||v.registration_number||'—',driver:v.driverName||v.driver_name||'—',status:'offline',updated:'لا تتوفر إحداثيات بعد',lat:null,lng:null}));
+    let batchRows=null;
+    try{batchRows=await fetchAllLatestLocations(orgId);}catch(error){batchRows=null;}
+    if(batchRows!==null){
+      const byVehicle=new Map(batchRows.map(row=>[String(row.vehicle_id),row.location]));
+      vehicles=base.map(v=>applyLatestLocation(v,byVehicle.get(String(v.id))));
+    }else{
+      vehicles=await Promise.all(base.map(async v=>{try{return applyLatestLocation(v,await api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`));}catch{return v;}}));
+    }
+    renderVehicles();updateStats();drawMarkers();
+  }
   function openModal(id){$(id).classList.add('open');$(id).setAttribute('aria-hidden','false');}function closeModal(id){$(id).classList.remove('open');$(id).setAttribute('aria-hidden','true');}
-  async function login(e){e.preventDefault();$('loginMessage').textContent='جارٍ تسجيل الدخول…';try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({identifier:$('identifier').value.trim(),password:$('password').value})});token=data.accessToken;refreshToken=data.refreshToken;sessionStorage.setItem('darb_access',token);sessionStorage.setItem('darb_refresh',refreshToken);setConnection(true);closeModal('loginModal');if (!orgId) { vehicles=[];renderVehicles();updateStats();drawMarkers();$('settingsMessage').textContent='أنشئ مؤسسة من صفحة الإعدادات لبدء إضافة المركبات.'; } if (orgId) {
-  await loadVehicles();
-  connectDarbRealtime();
-}
-startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textContent=err.message;}}
+  async function login(e){e.preventDefault();$('loginMessage').textContent='جارٍ تسجيل الدخول…';try{const data=await api('/auth/login',{method:'POST',body:JSON.stringify({identifier:$('identifier').value.trim(),password:$('password').value})});token=data.accessToken;refreshToken=data.refreshToken;sessionStorage.setItem('darb_access',token);sessionStorage.setItem('darb_refresh',refreshToken);setConnection(true);closeModal('loginModal');const loadedOrgs=await loadOrganizations();if(!loadedOrgs&&orgId){await loadVehicles();connectDarbRealtime();startAlertPolling();}else if(!loadedOrgs){startAlertPolling();} $('loginForm').reset();}catch(err){$('loginMessage').textContent=err.message;}}
   async function logout(){try{if(token&&refreshToken)await api('/auth/logout',{method:'POST',body:JSON.stringify({refreshToken})});}catch(error){console.warn('Server logout did not complete; clearing local session.',error);}if(alertPollTimer){clearInterval(alertPollTimer);alertPollTimer=null;}alertKnownIds.clear();alertBaselineReady=false;if (darbSocket) {
   darbSocket.disconnect();
   darbSocket = null;
-}token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
+}stopLiveLocationPolling();token='';refreshToken='';alertCount=0;sessionStorage.removeItem('darb_access');sessionStorage.removeItem('darb_refresh');vehicles=[...demoVehicles];renderVehicles();updateStats();drawMarkers();setConnection(false);}
   async function createOrganization(){
     const name=$('orgName').value.trim();
     const msg=$('settingsMessage');
@@ -94,7 +160,7 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
       localStorage.setItem('darb_org',orgId);
       $('orgId').value=orgId;
       msg.textContent='تم إنشاء المؤسسة وربط حسابك بها بنجاح.';
-      await loadVehicles();
+      await loadOrganizations();
       connectDarbRealtime();
       startAlertPolling();
     }catch(error){msg.textContent='تعذر إنشاء المؤسسة: '+error.message;}
@@ -112,7 +178,8 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
     rows.innerHTML='<tr><td colspan="7">جارٍ تحميل الأجهزة…</td></tr>';
     try{
       const data=await api('/tracking/devices/vehicle/'+encodeURIComponent(vehicleId));
-      const devices=(Array.isArray(data)?data:[]).filter(d=>d.device_type==='gps_tracker');
+      const deviceList=Array.isArray(data)?data:(Array.isArray(data?.data)?data.data:[]);
+      const devices=deviceList.filter(d=>d.device_type==='gps_tracker');
       if(!devices.length){rows.innerHTML='<tr><td colspan="7">لا توجد أجهزة GPS مستقلة مرتبطة بهذه المركبة.</td></tr>';return;}
       const labels={json:'JSON / HTTP',gt06:'GT06',nmea:'NMEA'};
       rows.innerHTML=devices.map(d=>'<tr><td>'+escapeHtml(d.label||'جهاز GPS')+'</td><td>'+escapeHtml(labels[d.protocol]||d.protocol||'—')+'</td><td>'+escapeHtml(d.imei||'—')+'</td><td>'+escapeHtml(d.model||'—')+'</td><td>'+escapeHtml(d.status==='active'?'نشط':'ملغي')+'</td><td>'+escapeHtml(d.last_seen_at?formatDateTime(d.last_seen_at):'لم يتصل بعد')+'</td><td>'+(d.status==='active'?'<button type="button" class="outline-btn" data-rotate-device="'+escapeHtml(d.id)+'">تدوير الرمز</button> <button type="button" class="outline-btn" data-revoke-device="'+escapeHtml(d.id)+'">إلغاء الجهاز</button>':'—')+'</td></tr>').join('');
@@ -202,10 +269,12 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
     $('tripRows').innerHTML='<tr><td colspan="5">جارٍ التحميل…</td></tr>';
     $('stopRows').innerHTML='<tr><td colspan="4">جارٍ التحميل…</td></tr>';
     try{
-      const [trips,stops]=await Promise.all([
+      const [tripsResponse,stopsResponse]=await Promise.all([
         api(`/tracking/vehicles/${encodeURIComponent(vehicleId)}/trips?${query}&limit=100`),
         api(`/tracking/vehicles/${encodeURIComponent(vehicleId)}/stops?${query}&limit=500`)
       ]);
+      const trips=Array.isArray(tripsResponse)?tripsResponse:(Array.isArray(tripsResponse?.data)?tripsResponse.data:[]);
+      const stops=Array.isArray(stopsResponse)?stopsResponse:(Array.isArray(stopsResponse?.data)?stopsResponse.data:[]);
       $('tripRows').innerHTML=trips.length?trips.map(trip=>`<tr><td>${escapeHtml(formatDateTime(trip.start_at))}</td><td>${escapeHtml(formatDateTime(trip.end_at))}</td><td>${escapeHtml(formatDistance(trip.distance_meters))}</td><td>${Number(trip.points_count)||0}</td><td><button class="outline-btn trip-route-btn" type="button" data-from="${escapeHtml(trip.start_at)}" data-to="${escapeHtml(trip.end_at)}">عرض المسار</button></td></tr>`).join(''):'<tr><td colspan="5">لا توجد رحلات مسجلة خلال الفترة المحددة.</td></tr>';
       $('stopRows').innerHTML=stops.length?stops.map(stop=>`<tr><td>${escapeHtml(formatDateTime(stop.start_at))}</td><td>${escapeHtml(formatDuration(stop.duration_seconds))}</td><td>${Number(stop.points_count)||0}</td><td dir="ltr">${Number(stop.latitude).toFixed(5)}, ${Number(stop.longitude).toFixed(5)}</td></tr>`).join(''):'<tr><td colspan="4">لا توجد توقفات طويلة خلال الفترة المحددة.</td></tr>';
       message.textContent=`تم تحميل ${trips.length} رحلة و${stops.length} توقف.`;
@@ -313,14 +382,78 @@ startAlertPolling();$('loginForm').reset();}catch(err){$('loginMessage').textCon
   }
   function toggleAlertRuleFields(){const geo=$('alertRuleType').value==='geofence';$('geofenceRuleFields').hidden=!geo;$('speedRuleFields').hidden=geo;}
   async function testConnection(){const msg=$('settingsMessage');msg.textContent='جارٍ فحص الاتصال…';try{const base=$('apiBase').value.trim().replace(/\/$/,'');if(!base)throw new Error('أدخل عنوان الخادم.');const res=await fetch(`${base}/health/live`);if(!res.ok)throw new Error(`الخادم أعاد ${res.status}`);msg.textContent='نجح الاتصال بالخادم.';}catch(e){msg.textContent=`تعذر الاتصال: ${e.message}`;}}
-  function bind(){document.querySelectorAll('[data-view]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();showPage(a.dataset.view);}));$('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));$('loginBtn').addEventListener('click',()=>openModal('loginModal'));$('noticeLogin').addEventListener('click',()=>openModal('loginModal'));if($('tripsLogin'))$('tripsLogin').addEventListener('click',()=>openModal('loginModal'));$('closeLogin').addEventListener('click',()=>closeModal('loginModal'));$('closeVehicle').addEventListener('click',()=>closeModal('vehicleModal'));$('loginForm').addEventListener('submit',login);$('vehicleForm').addEventListener('submit',addVehicle);$('logoutBtn').addEventListener('click',logout);$('enrollDeviceBtn').addEventListener('click',enrollGpsDevice);$('deviceProtocol').addEventListener('change',toggleDeviceProfileFields);$('deviceVehicle').addEventListener('change',loadGpsDevices);$('refreshGpsDevices').addEventListener('click',loadGpsDevices);$('gpsDeviceRows').addEventListener('click',event=>{const rotate=event.target.closest('[data-rotate-device]');if(rotate){rotateGpsDeviceCredential(rotate.dataset.rotateDevice);return;}const revoke=event.target.closest('[data-revoke-device]');if(revoke)revokeGpsDevice(revoke.dataset.revokeDevice);});toggleDeviceProfileFields();$('copyDeviceCredential').addEventListener('click',async()=>{const value=$('deviceCredential').value;if(!value){$('deviceMessage').textContent='لا يوجد رمز لنسخه.';return;}try{await navigator.clipboard.writeText(value);$('deviceMessage').textContent='تم نسخ الرمز.';}catch{$('deviceMessage').textContent='تعذر النسخ؛ حدد الرمز وانسخه يدوياً.';}});$('addVehicleBtn').addEventListener('click',()=>openModal('vehicleModal'));$('vehiclesAddBtn').addEventListener('click',()=>openModal('vehicleModal'));$('createOrgBtn').addEventListener('click',createOrganization);$('saveSettings').addEventListener('click',()=>{apiBase=$('apiBase').value.trim().replace(/\/$/,'');orgId=$('orgId').value.trim();localStorage.setItem('darb_api',apiBase);localStorage.setItem('darb_org',orgId);$('settingsMessage').textContent='تم حفظ الإعدادات على هذا المتصفح.';});$('testConnection').addEventListener('click',testConnection);$('loadTripsBtn').addEventListener('click',loadTrips);$('refreshAlertsBtn').addEventListener('click',()=>loadAlerts().catch(e=>$('alertMessage').textContent='تعذر التحديث: '+e.message));$('enableNotificationsBtn').addEventListener('click',enableAlertNotifications);$('alertStatusFilter').addEventListener('change',()=>loadAlerts().catch(e=>$('alertMessage').textContent='تعذر التحديث: '+e.message));$('alertRuleForm').addEventListener('submit',createAlertRule);$('alertRuleType').addEventListener('change',toggleAlertRuleFields);$('alertRows').addEventListener('click',async e=>{const btn=e.target.closest('.alert-ack-btn');if(!btn)return;btn.disabled=true;try{await api('/alerts/'+encodeURIComponent(btn.dataset.id)+'/'+(btn.dataset.action==='resolve'?'resolve':'acknowledge'),{method:'PATCH'});await loadAlerts();}catch(error){$('alertMessage').textContent='تعذر تأكيد التنبيه: '+error.message;btn.disabled=false;}});$('tripRows').addEventListener('click',e=>{const button=e.target.closest('.trip-route-btn');if(button)viewTripRoute(button.dataset.from,button.dataset.to);});$('refreshBtn').addEventListener('click',async()=>{try{await loadVehicles();$('refreshBtn').textContent='✓ تم التحديث';}catch(e){$('refreshBtn').textContent='تعذر التحديث';}setTimeout(()=>$('refreshBtn').textContent='↻ تحديث البيانات',1800);});$('vehicleSearch').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();$('allVehicleRows').innerHTML=vehicles.filter(v=>`${v.name} ${v.plate}`.toLowerCase().includes(q)).map(vehicleRow).join('');});$('locateMe').addEventListener('click',()=>{if(!navigator.geolocation)return alert('المتصفح لا يدعم تحديد الموقع.');navigator.geolocation.getCurrentPosition(p=>mapB?.setView([p.coords.latitude,p.coords.longitude],14),()=>alert('تعذر الوصول إلى موقعك. تحقق من صلاحية الموقع.'));});$('langBtn').addEventListener('click',()=>{alert('English interface is planned for the next web release. The current release is Arabic RTL.');});['loginModal','vehicleModal'].forEach(id=>$(id).addEventListener('click',e=>{if(e.target.id===id)closeModal(id);}));}
-  function start(){mapA=initMap('overviewMap');mapB=initMap('fullMap');const now=new Date();$('tripTo').value=localDateTimeValue(now);$('tripFrom').value=localDateTimeValue(new Date(now.getTime()-7*86400000));renderVehicles();updateStats();drawMarkers();bind();toggleAlertRuleFields();$('apiBase').value=apiBase;$('orgId').value=orgId;setConnection(Boolean(token));if(token&&orgId){loadVehicles().then(()=>{connectDarbRealtime();startAlertPolling();}).catch(e=>{console.warn(e);setConnection(false);});}else if(token){startAlertPolling();}if(token&&!orgId){vehicles=[];renderVehicles();updateStats();drawMarkers();}}
+  function bind(){document.querySelectorAll('[data-view]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();showPage(a.dataset.view);}));$('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));$('loginBtn').addEventListener('click',()=>openModal('loginModal'));$('noticeLogin').addEventListener('click',()=>openModal('loginModal'));if($('tripsLogin'))$('tripsLogin').addEventListener('click',()=>openModal('loginModal'));$('closeLogin').addEventListener('click',()=>closeModal('loginModal'));$('closeVehicle').addEventListener('click',()=>closeModal('vehicleModal'));$('loginForm').addEventListener('submit',login);$('vehicleForm').addEventListener('submit',addVehicle);$('logoutBtn').addEventListener('click',logout);$('enrollDeviceBtn').addEventListener('click',enrollGpsDevice);$('deviceProtocol').addEventListener('change',toggleDeviceProfileFields);$('deviceVehicle').addEventListener('change',loadGpsDevices);$('refreshGpsDevices').addEventListener('click',loadGpsDevices);$('gpsDeviceRows').addEventListener('click',event=>{const rotate=event.target.closest('[data-rotate-device]');if(rotate){rotateGpsDeviceCredential(rotate.dataset.rotateDevice);return;}const revoke=event.target.closest('[data-revoke-device]');if(revoke)revokeGpsDevice(revoke.dataset.revokeDevice);});toggleDeviceProfileFields();$('copyDeviceCredential').addEventListener('click',async()=>{const value=$('deviceCredential').value;if(!value){$('deviceMessage').textContent='لا يوجد رمز لنسخه.';return;}try{await navigator.clipboard.writeText(value);$('deviceMessage').textContent='تم نسخ الرمز.';}catch{$('deviceMessage').textContent='تعذر النسخ؛ حدد الرمز وانسخه يدوياً.';}});$('addVehicleBtn').addEventListener('click',()=>openModal('vehicleModal'));$('vehiclesAddBtn').addEventListener('click',()=>openModal('vehicleModal'));$('createOrgBtn').addEventListener('click',createOrganization);$('orgSelect').addEventListener('change',selectOrganizationFromList);$('refreshOrganizations').addEventListener('click',()=>loadOrganizations().then(ok=>{if(!ok)$('settingsMessage').textContent='تعذر تحميل المؤسسات؛ تحقق من الاتصال وتسجيل الدخول.';}));$('saveSettings').addEventListener('click',()=>{apiBase=$('apiBase').value.trim().replace(/\/$/,'');orgId=$('orgId').value.trim();localStorage.setItem('darb_api',apiBase);localStorage.setItem('darb_org',orgId);$('settingsMessage').textContent='تم حفظ الإعدادات على هذا المتصفح.';});$('testConnection').addEventListener('click',testConnection);$('loadTripsBtn').addEventListener('click',loadTrips);$('refreshAlertsBtn').addEventListener('click',()=>loadAlerts().catch(e=>$('alertMessage').textContent='تعذر التحديث: '+e.message));$('enableNotificationsBtn').addEventListener('click',enableAlertNotifications);$('alertStatusFilter').addEventListener('change',()=>loadAlerts().catch(e=>$('alertMessage').textContent='تعذر التحديث: '+e.message));$('alertRuleForm').addEventListener('submit',createAlertRule);$('alertRuleType').addEventListener('change',toggleAlertRuleFields);$('alertRows').addEventListener('click',async e=>{const btn=e.target.closest('.alert-ack-btn');if(!btn)return;btn.disabled=true;try{await api('/alerts/'+encodeURIComponent(btn.dataset.id)+'/'+(btn.dataset.action==='resolve'?'resolve':'acknowledge'),{method:'PATCH'});await loadAlerts();}catch(error){$('alertMessage').textContent='تعذر تأكيد التنبيه: '+error.message;btn.disabled=false;}});$('tripRows').addEventListener('click',e=>{const button=e.target.closest('.trip-route-btn');if(button)viewTripRoute(button.dataset.from,button.dataset.to);});$('refreshBtn').addEventListener('click',async()=>{try{await loadVehicles();$('refreshBtn').textContent='✓ تم التحديث';}catch(e){$('refreshBtn').textContent='تعذر التحديث';}setTimeout(()=>$('refreshBtn').textContent='↻ تحديث البيانات',1800);});$('vehicleSearch').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();$('allVehicleRows').innerHTML=vehicles.filter(v=>`${v.name} ${v.plate}`.toLowerCase().includes(q)).map(vehicleRow).join('');});$('locateMe').addEventListener('click',()=>{if(!navigator.geolocation)return alert('المتصفح لا يدعم تحديد الموقع.');navigator.geolocation.getCurrentPosition(p=>mapB?.setView([p.coords.latitude,p.coords.longitude],14),()=>alert('تعذر الوصول إلى موقعك. تحقق من صلاحية الموقع.'));});$('langBtn').addEventListener('click',()=>{alert('English interface is planned for the next web release. The current release is Arabic RTL.');});['loginModal','vehicleModal'].forEach(id=>$(id).addEventListener('click',e=>{if(e.target.id===id)closeModal(id);}));}
+  function start(){mapA=initMap('overviewMap');mapB=initMap('fullMap');const now=new Date();$('tripTo').value=localDateTimeValue(now);$('tripFrom').value=localDateTimeValue(new Date(now.getTime()-7*86400000));renderVehicles();updateStats();drawMarkers();bind();toggleAlertRuleFields();$('apiBase').value=apiBase;$('orgId').value=orgId;setConnection(Boolean(token));if(token){loadOrganizations().then(ok=>{if(!ok&&orgId){loadVehicles().then(()=>{connectDarbRealtime();startAlertPolling();}).catch(e=>{console.warn(e);setConnection(false);});}else if(!ok){startAlertPolling();}}).catch(e=>{console.warn(e);if(orgId)loadVehicles().then(()=>connectDarbRealtime()).catch(()=>{});else startAlertPolling();});}else{vehicles=[];renderVehicles();updateStats();drawMarkers();}}
   // DARB GPS - Realtime connection
 let darbSocket = null;
 
+function stopLiveLocationPolling() {
+  if (liveLocationPollTimer) {
+    clearInterval(liveLocationPollTimer);
+    liveLocationPollTimer = null;
+  }
+}
+function startLiveLocationPolling() {
+  if (!token || liveLocationPollTimer || document.visibilityState === 'hidden') return;
+  // REST fallback uses one request per tracked vehicle; 60s keeps Free-plan usage bounded.
+  liveLocationPollTimer = setInterval(pollLatestLocations, 60000);
+}
+async function pollLatestLocations() {
+  if (!token || liveLocationPollBusy) return;
+  const tracked = vehicles.filter(v => v.id && !String(v.id).startsWith('demo-'));
+  if (!tracked.length) return;
+  liveLocationPollBusy = true;
+  try {
+    let changed = false;
+    const isFreeWorkerApi = (() => { try { return new URL(apiBase).hostname.startsWith('darb-gps-free-api'); } catch { return false; } })();
+    if (isFreeWorkerApi && orgId) {
+      try {
+        const rows = await fetchAllLatestLocations(orgId);
+        const byVehicle = new Map(rows.map(row => [String(row.vehicle_id), row.location]));
+        tracked.forEach(v => {
+          const next = applyLatestLocation(v, byVehicle.get(String(v.id)));
+          if (next !== v) { Object.assign(v, next); changed = true; }
+        });
+      } catch (batchError) {
+        console.warn('DARB: batch location polling unavailable; falling back to per-vehicle requests', batchError.message);
+        const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
+        results.forEach((result,index) => {
+          if(result.status!=='fulfilled')return;
+          const next=applyLatestLocation(tracked[index],result.value);
+          if(next!==tracked[index]){Object.assign(tracked[index],next);changed=true;}
+        });
+      }
+    } else {
+      const results = await Promise.allSettled(tracked.map(v => api(`/tracking/vehicles/${encodeURIComponent(v.id)}/latest`)));
+      results.forEach((result,index) => {
+        if(result.status!=='fulfilled')return;
+        const next=applyLatestLocation(tracked[index],result.value);
+        if(next!==tracked[index]){Object.assign(tracked[index],next);changed=true;}
+      });
+    }
+    if (changed) {
+      renderVehicles();
+      updateStats();
+      drawMarkers();
+    }
+  } catch (error) {
+    console.warn('DARB: REST location polling failed', error.message);
+  } finally {
+    liveLocationPollBusy = false;
+  }
+}
 function connectDarbRealtime() {
-  if (!window.io || !apiBase || !token) {
-    console.warn('DARB: Realtime prerequisites missing');
+  const isFreeWorkerApi = (() => {
+    try { return new URL(apiBase).hostname.startsWith('darb-gps-free-api'); }
+    catch { return false; }
+  })();
+  if (isFreeWorkerApi || !window.io || !apiBase || !token) {
+    if (darbSocket) {
+      darbSocket.disconnect();
+      darbSocket = null;
+    }
+    console.info('DARB: Socket.IO unavailable on the selected API; using REST location polling');
+    startLiveLocationPolling();
     return;
   }
 
@@ -337,6 +470,7 @@ function connectDarbRealtime() {
 
   darbSocket.on('connect', () => {
     console.log('DARB: Live tracking connected');
+    stopLiveLocationPolling();
     vehicles
   .filter(v => v.id && !String(v.id).startsWith('demo-'))
   .forEach(v => {
@@ -374,6 +508,7 @@ function connectDarbRealtime() {
 
   darbSocket.on('disconnect', reason => {
     console.log('DARB: Live tracking disconnected', reason);
+    startLiveLocationPolling();
     if(reason==='io server disconnect'&&refreshToken&&!socketRefreshInProgress){
       socketRefreshInProgress=true;
       refreshAccessToken()
@@ -385,8 +520,19 @@ function connectDarbRealtime() {
 
   darbSocket.on('connect_error', error => {
     console.error('DARB realtime error:', error.message);
+    startLiveLocationPolling();
   });
 }
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pollAlertUpdates();});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'){
+      pollAlertUpdates();
+      if(token&&(!darbSocket||!darbSocket.connected)){
+        startLiveLocationPolling();
+        pollLatestLocations();
+      }
+    }else{
+      stopLiveLocationPolling();
+    }
+  });
   document.addEventListener('DOMContentLoaded',start);
 })();

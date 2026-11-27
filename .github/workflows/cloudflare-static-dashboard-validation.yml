@@ -1,0 +1,43 @@
+name: DARB GPS static dashboard validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [cloudflare-free-api-migration-next]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-static-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify required assets
+        run: |
+          test -s index.html
+          test -s app.js
+          test -s styles.css
+          test -s dashboard-help.html
+          grep -q 'styles.css' index.html
+          grep -q 'app.js' index.html
+          grep -q 'dashboard-help.html' index.html
+          grep -q 'orgSelect' index.html
+          grep -q 'refreshOrganizations' index.html
+          grep -q 'loadOrganizations' app.js
+      - name: JavaScript syntax check
+        run: node --check app.js
+      - name: Prepare and verify Pages bundle
+        run: |
+          mkdir -p dist-web
+          cp index.html app.js styles.css dashboard-help.html dist-web/
+          test -s dist-web/index.html
+          test -s dist-web/app.js
+          test -s dist-web/styles.css
+          test -s dist-web/dashboard-help.html

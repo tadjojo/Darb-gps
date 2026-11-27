@@ -13,6 +13,9 @@ import 'services/pending_location_store.dart';
 import 'services/realtime_client.dart';
 import 'services/navigation_service.dart';
 import 'services/gps_coordinate_validator.dart';
+import 'services/gps_tracker_api.dart';
+import 'widgets/alerts_panel.dart';
+import 'widgets/gps_tracker_panel.dart';
 
 void main() => runApp(const DarbApp());
 
@@ -44,6 +47,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _storage = FlutterSecureStorage();
   late final DarbClient api = DarbClient(_storage);
+  late final GpsTrackerApi trackerApi = GpsTrackerApi(api);
   final PendingLocationStore queue = PendingLocationStore();
   final DarbRealtimeClient realtime = DarbRealtimeClient();
   final MapController mapController = MapController();
@@ -69,6 +73,9 @@ class _HomePageState extends State<HomePage> {
   String? vehicleId, deviceId, organizationId;
   int pendingCount = 0;
   List<Map<String, dynamic>> registeredDevices = [];
+  List<Map<String, dynamic>> organizationOptions = [];
+  List<Map<String, dynamic>> vehicleOptions = [];
+  bool loadingOrganizations = false;
   bool loadingDevices = false;
   List<Map<String, dynamic>> tripHistory = [];
   List<Map<String, dynamic>> stopHistory = [];
@@ -102,7 +109,7 @@ class _HomePageState extends State<HomePage> {
     organizationId = await _storage.read(key: 'organization_id');
     pendingCount = await queue.count();
     if (mounted) setState(() {});
-    if (loggedIn && vehicleId != null) await _connectRealtime();
+    if (loggedIn) { final loaded = await _loadOrganizations(); if (!loaded && vehicleId != null) await _connectRealtime(); }
     syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _syncQueue());
     tokenTimer = Timer.periodic(const Duration(minutes: 8), (_) async {
       if (!loggedIn) return;
@@ -133,7 +140,75 @@ class _HomePageState extends State<HomePage> {
       await api.login(_identifier.text, _password.text);
       if (!mounted) return;
       setState(() { loggedIn = true; message = tr('تم تسجيل الدخول بأمان', 'Signed in securely'); });
-      if (vehicleId != null) await _connectRealtime();
+      final loaded = await _loadOrganizations();
+      if (!loaded && vehicleId != null) await _connectRealtime();
+    } catch (e) { _showError(e); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
+
+  Future<bool> _loadOrganizations() async {
+    if (!loggedIn || loadingOrganizations) return false;
+    setState(() => loadingOrganizations = true);
+    try {
+      final rows = await api.listOrganizations();
+      final savedOrg = organizationId;
+      final preferred = rows.any((o) => o['id']?.toString() == savedOrg) ? savedOrg : (rows.isNotEmpty ? rows.first['id']?.toString() : null);
+      if (mounted) setState(() { organizationOptions = rows; organizationId = preferred; });
+      if (preferred == null) {
+        vehicleOptions = [];
+        vehicleId = null;
+        deviceId = null;
+        await _storage.delete(key: 'organization_id');
+        await _storage.delete(key: 'vehicle_id');
+        if (mounted) setState(() => message = tr('لا توجد مؤسسة مرتبطة بالحساب؛ أنشئ مؤسسة جديدة.', 'No organization is linked to this account. Create one.'));
+        return true;
+      }
+      await _storage.write(key: 'organization_id', value: preferred);
+      await _loadOrganizationVehicles(preferred, preferSaved: true);
+      return true;
+    } catch (e) {
+      _showError(e);
+      return false;
+    } finally {
+      if (mounted) setState(() => loadingOrganizations = false);
+    }
+  }
+
+  Future<void> _loadOrganizationVehicles(String orgId, {bool preferSaved = false}) async {
+    final rows = await api.listVehicles(orgId);
+    final options = rows.whereType<Map>().map((v) => Map<String, dynamic>.from(v)).where((v) => v['status'] == null || v['status'] == 'active').toList();
+    final savedVehicle = preferSaved ? vehicleId : null;
+    final selected = options.any((v) => v['id']?.toString() == savedVehicle) ? savedVehicle : (options.isNotEmpty ? options.first['id']?.toString() : null);
+    if (!mounted) return;
+    setState(() { vehicleOptions = options; vehicleId = selected; deviceId = null; });
+    if (selected == null) {
+      await _storage.delete(key: 'vehicle_id');
+      if (mounted) setState(() => message = tr('لا توجد مركبات في المؤسسة المحددة؛ أضف مركبة جديدة.', 'No vehicles in this organization. Add one.'));
+      return;
+    }
+    await _storage.write(key: 'vehicle_id', value: selected);
+    await _connectRealtime();
+    await _loadDevices();
+  }
+
+  Future<void> _selectOrganization(String? id) async {
+    if (id == null || id == organizationId || busy) return;
+    setState(() { busy = true; organizationId = id; vehicleId = null; deviceId = null; });
+    try {
+      await _storage.write(key: 'organization_id', value: id);
+      await _storage.delete(key: 'vehicle_id');
+      await _loadOrganizationVehicles(id);
+    } catch (e) { _showError(e); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
+
+  Future<void> _selectVehicle(String? id) async {
+    if (id == null || id == vehicleId || busy) return;
+    setState(() { busy = true; vehicleId = id; deviceId = null; });
+    try {
+      await _storage.write(key: 'vehicle_id', value: id);
+      await _connectRealtime();
+      await _loadDevices();
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => busy = false); }
   }
@@ -150,6 +225,7 @@ class _HomePageState extends State<HomePage> {
       await _storage.write(key: 'organization_id', value: orgId);
       await _storage.write(key: 'vehicle_id', value: vId);
       if (mounted) setState(() { organizationId = orgId; vehicleId = vId; deviceId = null; message = tr('تم إنشاء المؤسسة والمركبة', 'Organization and vehicle created'); });
+      await _loadOrganizations();
       await _enrollDevice();
     } catch (e) { _showError(e); }
     finally { if (mounted) setState(() => busy = false); }
@@ -263,7 +339,7 @@ class _HomePageState extends State<HomePage> {
         final lat = (event['latitude'] as num?)?.toDouble();
         final lng = (event['longitude'] as num?)?.toDouble();
         // Realtime payloads are untrusted input: validate before constructing LatLng.
-        if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+        if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
         final id = event['eventId']?.toString() ?? event['outboxId']?.toString();
         if (id != null) {
           if (!seenEvents.add(id)) return;
@@ -281,7 +357,7 @@ class _HomePageState extends State<HomePage> {
       if (data == null) return;
       final lat = (data['latitude'] as num?)?.toDouble();
       final lng = (data['longitude'] as num?)?.toDouble();
-      if (!GpsCoordinateValidator.isValid(lat, lng)) return;
+      if (lat == null || lng == null || !GpsCoordinateValidator.isValid(lat, lng)) return;
       if (mounted) setState(() => position = LatLng(lat, lng));
     } catch (_) { /* REST refresh is retried on the next reconnect/manual action. */ }
   }
@@ -422,7 +498,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final center = position ?? const LatLng(31.9539, 35.9106);
-    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), settingsScreen()];
+    final pages = [mapScreen(center), trackingScreen(), vehiclesScreen(), tripsScreen(), AlertsPanel(api: api, vehicleId: loggedIn ? vehicleId : null, active: tab == 4, arabic: widget.arabic, position: position), settingsScreen()];
     return Directionality(textDirection: widget.arabic ? TextDirection.rtl : TextDirection.ltr, child: Scaffold(
       appBar: AppBar(backgroundColor: Colors.white,
         title: const Row(children: [Icon(Icons.navigation, color: Color(0xFF0878E8)), SizedBox(width: 8), Text('DARB GPS', style: TextStyle(fontWeight: FontWeight.bold))]),
@@ -433,6 +509,7 @@ class _HomePageState extends State<HomePage> {
         NavigationDestination(icon: const Icon(Icons.share_location), label: tr('التتبع', 'Tracking')),
         NavigationDestination(icon: const Icon(Icons.directions_car), label: tr('المركبات', 'Vehicles')),
         NavigationDestination(icon: const Icon(Icons.route), label: tr('الرحلات', 'Trips')),
+        NavigationDestination(icon: const Icon(Icons.notifications), label: tr('التنبيهات', 'Alerts')),
         NavigationDestination(icon: const Icon(Icons.settings), label: tr('الإعدادات', 'Settings')),
       ]),
     ));
@@ -512,7 +589,7 @@ class _HomePageState extends State<HomePage> {
     Card(child: ListTile(leading: const Icon(Icons.directions_car), title: Text(vehicleId ?? tr('لا توجد مركبة محددة', 'No vehicle selected')), subtitle: Text(deviceId ?? tr('لم يتم اعتماد الهاتف بعد', 'Phone not enrolled')), trailing: IconButton(icon: const Icon(Icons.add_link), onPressed: loggedIn ? _enrollDevice : null))),
     Card(child: ListTile(leading: const Icon(Icons.router), title: Text(tr('أجهزة GPS المسجلة للمركبة', 'GPS devices registered to this vehicle')), subtitle: Text(loadingDevices ? tr('جارٍ تحميل الأجهزة...', 'Loading devices...') : '${registeredDevices.length} ${tr('جهاز', 'device(s)')}'), trailing: IconButton(onPressed: loadingDevices ? null : _loadDevices, icon: const Icon(Icons.refresh)))),
     if (registeredDevices.isEmpty && !loadingDevices) Card(child: ListTile(leading: const Icon(Icons.info_outline), title: Text(tr('لا توجد أجهزة مستقلة مسجلة', 'No independent trackers registered')), subtitle: Text(tr('تظهر هنا الأجهزة التي يعتمدها مسؤول النظام للمركبة', 'Trackers provisioned for this vehicle by an administrator appear here')))),
-    ...registeredDevices.map((device) {
+    ...registeredDevices.where((device) => device['device_type'] != 'gps_tracker').map((device) {
       final isTracker = device['device_type']?.toString() == 'gps_tracker';
       final status = device['connectionStatus']?.toString() ?? 'unknown';
       final online = status == 'online';
@@ -524,6 +601,7 @@ class _HomePageState extends State<HomePage> {
       final details = <String>[if (manufacturer != null && manufacturer.isNotEmpty) manufacturer, if (model != null && model.isNotEmpty) model, if (protocol != null && protocol.isNotEmpty) protocol.toUpperCase(), if (battery is num) '${battery.round()}%'].join(' • ');
       return Card(child: ListTile(leading: Icon(isTracker ? Icons.router : Icons.phone_android, color: online ? Colors.green : Colors.grey), title: Text(label), subtitle: Text('${tr(online ? 'متصل' : status == 'never_connected' ? 'لم يتصل بعد' : 'غير متصل', online ? 'Online' : status == 'never_connected' ? 'Never connected' : 'Offline')}${details.isEmpty ? '' : ' • $details'}'), trailing: Icon(status == 'never_connected' ? Icons.hourglass_empty : online ? Icons.wifi : Icons.wifi_off)));
     }),
+    SizedBox(height: 340, child: GpsTrackerPanel(api: api, trackerApi: trackerApi, vehicleId: loggedIn ? vehicleId : null, active: tab == 2, arabic: widget.arabic)),
   ]);
 
   Widget tripsScreen() => ListView(padding: const EdgeInsets.all(16), children: [
@@ -573,6 +651,25 @@ class _HomePageState extends State<HomePage> {
     TextField(controller: _password, obscureText: true, decoration: InputDecoration(labelText: tr('كلمة المرور', 'Password'))),
     const SizedBox(height: 8),
     FilledButton(onPressed: busy ? null : _login, child: Text(busy ? tr('يرجى الانتظار', 'Please wait') : tr(loggedIn ? 'تحديث تسجيل الدخول' : 'تسجيل الدخول', loggedIn ? 'Refresh login' : 'Sign in'))),
+    if (loggedIn) ...[
+      const Divider(height: 28),
+      Text(tr('اختيار المؤسسة والمركبة', 'Select organization & vehicle'), style: const TextStyle(fontWeight: FontWeight.bold)),
+      DropdownButtonFormField<String>(
+        value: organizationOptions.any((o) => o['id']?.toString() == organizationId) ? organizationId : null,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr('المؤسسة', 'Organization')),
+        items: organizationOptions.map((o) => DropdownMenuItem<String>(value: o['id']?.toString(), child: Text(o['name']?.toString() ?? tr('مؤسسة', 'Organization')))).toList(),
+        onChanged: busy ? null : _selectOrganization,
+      ),
+      DropdownButtonFormField<String>(
+        value: vehicleOptions.any((v) => v['id']?.toString() == vehicleId) ? vehicleId : null,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: tr('المركبة', 'Vehicle')),
+        items: vehicleOptions.map((v) => DropdownMenuItem<String>(value: v['id']?.toString(), child: Text(v['display_name']?.toString() ?? v['displayName']?.toString() ?? tr('مركبة', 'Vehicle')))).toList(),
+        onChanged: busy || organizationId == null ? null : _selectVehicle,
+      ),
+      OutlinedButton.icon(onPressed: busy || loadingOrganizations ? null : _loadOrganizations, icon: const Icon(Icons.refresh), label: Text(tr('تحديث المؤسسات والمركبات', 'Refresh organizations & vehicles'))),
+    ],
     const Divider(height: 28),
     Text(tr('إنشاء مؤسسة ومركبة', 'Create organization & vehicle'), style: const TextStyle(fontWeight: FontWeight.bold)),
     TextField(controller: _orgName, decoration: InputDecoration(labelText: tr('اسم المؤسسة', 'Organization name'))),
